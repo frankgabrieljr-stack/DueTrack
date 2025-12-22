@@ -6,11 +6,63 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		8006EC5F2EE90F8A00640A58 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8006EC5E2EE90F8A00640A58 /* WidgetKit.framework */; };
+		8006EC612EE90F8A00640A58 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8006EC602EE90F8A00640A58 /* SwiftUI.framework */; };
+		8006EC722EE90F8B00640A58 /* DueTrackNextBillWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8006EC5C2EE90F8A00640A58 /* DueTrackNextBillWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		8006EC702EE90F8B00640A58 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 803B3C092EBF92A400325E32 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8006EC5B2EE90F8A00640A58;
+			remoteInfo = DueTrackNextBillWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		8006EC772EE90F8B00640A58 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				8006EC722EE90F8B00640A58 /* DueTrackNextBillWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		8006EC5C2EE90F8A00640A58 /* DueTrackNextBillWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DueTrackNextBillWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		8006EC5E2EE90F8A00640A58 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		8006EC602EE90F8A00640A58 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		8006EC782EE9114B00640A58 /* DueTrackNextBillWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DueTrackNextBillWidgetExtension.entitlements; sourceTree = "<group>"; };
 		803B3C112EBF92A400325E32 /* DueTrack.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DueTrack.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		8006EC732EE90F8B00640A58 /* Exceptions for "DueTrackNextBillWidget" folder in "DueTrackNextBillWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 8006EC5B2EE90F8A00640A58 /* DueTrackNextBillWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		8006EC622EE90F8A00640A58 /* DueTrackNextBillWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				8006EC732EE90F8B00640A58 /* Exceptions for "DueTrackNextBillWidget" folder in "DueTrackNextBillWidgetExtension" target */,
+			);
+			path = DueTrackNextBillWidget;
+			sourceTree = "<group>";
+		};
 		803B3C132EBF92A400325E32 /* DueTrack */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = DueTrack;
@@ -19,6 +71,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		8006EC592EE90F8A00640A58 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8006EC612EE90F8A00640A58 /* SwiftUI.framework in Frameworks */,
+				8006EC5F2EE90F8A00640A58 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		803B3C0E2EBF92A400325E32 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -29,10 +90,22 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		8006EC5D2EE90F8A00640A58 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				8006EC5E2EE90F8A00640A58 /* WidgetKit.framework */,
+				8006EC602EE90F8A00640A58 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		803B3C082EBF92A400325E32 = {
 			isa = PBXGroup;
 			children = (
+				8006EC782EE9114B00640A58 /* DueTrackNextBillWidgetExtension.entitlements */,
 				803B3C132EBF92A400325E32 /* DueTrack */,
+				8006EC622EE90F8A00640A58 /* DueTrackNextBillWidget */,
+				8006EC5D2EE90F8A00640A58 /* Frameworks */,
 				803B3C122EBF92A400325E32 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +114,7 @@
 			isa = PBXGroup;
 			children = (
 				803B3C112EBF92A400325E32 /* DueTrack.app */,
+				8006EC5C2EE90F8A00640A58 /* DueTrackNextBillWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -48,6 +122,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		8006EC5B2EE90F8A00640A58 /* DueTrackNextBillWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8006EC742EE90F8B00640A58 /* Build configuration list for PBXNativeTarget "DueTrackNextBillWidgetExtension" */;
+			buildPhases = (
+				8006EC582EE90F8A00640A58 /* Sources */,
+				8006EC592EE90F8A00640A58 /* Frameworks */,
+				8006EC5A2EE90F8A00640A58 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				8006EC622EE90F8A00640A58 /* DueTrackNextBillWidget */,
+			);
+			name = DueTrackNextBillWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = DueTrackNextBillWidgetExtension;
+			productReference = 8006EC5C2EE90F8A00640A58 /* DueTrackNextBillWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		803B3C102EBF92A400325E32 /* DueTrack */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 803B3C212EBF92A500325E32 /* Build configuration list for PBXNativeTarget "DueTrack" */;
@@ -55,10 +151,12 @@
 				803B3C0D2EBF92A400325E32 /* Sources */,
 				803B3C0E2EBF92A400325E32 /* Frameworks */,
 				803B3C0F2EBF92A400325E32 /* Resources */,
+				8006EC772EE90F8B00640A58 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				8006EC712EE90F8B00640A58 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				803B3C132EBF92A400325E32 /* DueTrack */,
@@ -80,6 +178,9 @@
 				LastSwiftUpdateCheck = 2610;
 				LastUpgradeCheck = 2610;
 				TargetAttributes = {
+					8006EC5B2EE90F8A00640A58 = {
+						CreatedOnToolsVersion = 26.1.1;
+					};
 					803B3C102EBF92A400325E32 = {
 						CreatedOnToolsVersion = 26.1;
 					};
@@ -100,11 +201,19 @@
 			projectRoot = "";
 			targets = (
 				803B3C102EBF92A400325E32 /* DueTrack */,
+				8006EC5B2EE90F8A00640A58 /* DueTrackNextBillWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		8006EC5A2EE90F8A00640A58 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		803B3C0F2EBF92A400325E32 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -115,6 +224,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		8006EC582EE90F8A00640A58 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		803B3C0D2EBF92A400325E32 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -124,7 +240,77 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		8006EC712EE90F8B00640A58 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8006EC5B2EE90F8A00640A58 /* DueTrackNextBillWidgetExtension */;
+			targetProxy = 8006EC702EE90F8B00640A58 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		8006EC752EE90F8B00640A58 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = DueTrackNextBillWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 14;
+				DEVELOPMENT_TEAM = VAGPVSLZBU;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DueTrackNextBillWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = DueTrackNextBillWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.frankg.DueTrack.DueTrackNextBillWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		8006EC762EE90F8B00640A58 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = DueTrackNextBillWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 14;
+				DEVELOPMENT_TEAM = VAGPVSLZBU;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DueTrackNextBillWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = DueTrackNextBillWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.frankg.DueTrack.DueTrackNextBillWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		803B3C1F2EBF92A500325E32 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -248,21 +434,27 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=iphoneos*]" = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = DueTrack/DueTrack.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 14;
+				DEVELOPMENT_TEAM = VAGPVSLZBU;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.frankg.DueTrack;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -279,21 +471,27 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=iphoneos*]" = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = DueTrack/DueTrack.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 14;
+				DEVELOPMENT_TEAM = VAGPVSLZBU;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.frankg.DueTrack;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -309,6 +507,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		8006EC742EE90F8B00640A58 /* Build configuration list for PBXNativeTarget "DueTrackNextBillWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8006EC752EE90F8B00640A58 /* Debug */,
+				8006EC762EE90F8B00640A58 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		803B3C0C2EBF92A400325E32 /* Build configuration list for PBXProject "DueTrack" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
