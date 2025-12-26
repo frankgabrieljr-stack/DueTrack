@@ -1,8 +1,8 @@
 //
 //  DueTrackNextBillWidget.swift
-//  DueTrack
+//  DueTrackNextBillWidget
 //
-//  Created by Frank Gabriel on 12/25/25.
+//  Created by Frank Gabriel on 12/9/25.
 //
 
 import WidgetKit
@@ -335,6 +335,7 @@ struct DueTrackThisWeekWidgetEntryView: View {
         let todayBills = entry.bills.filter { calendar.isDate($0.dueDate, inSameDayAs: today) }
 
         return VStack(alignment: .leading, spacing: 6) {
+            // Header: weekday + day number
             Text(today.weekdayUppercased)
                 .font(.caption)
                 .foregroundColor(.red)
@@ -455,13 +456,32 @@ private extension Date {
 private extension Color {
     static func categoryColor(for category: String) -> Color {
         switch category {
-        case "Utilities": return Color(red: 59/255, green: 130/255, blue: 246/255)
-        case "Subscriptions": return Color(red: 139/255, green: 92/255, blue: 246/255)
-        case "Loans": return Color(red: 236/255, green: 72/255, blue: 153/255)
-        case "Insurance": return Color(red: 16/255, green: 185/255, blue: 129/255)
-        case "Rent": return Color(red: 249/255, green: 115/255, blue: 22/255)
-        case "Credit Card": return Color(red: 245/255, green: 158/255, blue: 11/255)
-        default: return Color(red: 107/255, green: 114/255, blue: 128/255)
+        case "Utilities": return Color(red: 59/255, green: 130/255, blue: 246/255)    // #3B82F6
+        case "Subscriptions": return Color(red: 139/255, green: 92/255, blue: 246/255) // #8B5CF6
+        case "Loans": return Color(red: 236/255, green: 72/255, blue: 153/255)        // #EC4899
+        case "Insurance": return Color(red: 16/255, green: 185/255, blue: 129/255)    // #10B981
+        case "Rent": return Color(red: 249/255, green: 115/255, blue: 22/255)         // #F97316 (Home)
+        case "Credit Card": return Color(red: 245/255, green: 158/255, blue: 11/255)  // #F59E0B
+        default: return Color(red: 107/255, green: 114/255, blue: 128/255)            // #6B7280
         }
     }
 }
+
+// MARK: - Preview
+
+#Preview(as: .systemSmall) {
+    DueTrackNextBillWidget()
+} timeline: {
+    NextBillEntry(
+        date: .now,
+        snapshot: NextBillSnapshot(
+            billId: UUID(),
+            name: "Sample Bill",
+            amount: 17.00,
+            dueDate: .now,
+            isOverdue: false
+        )
+    )
+}
+
+

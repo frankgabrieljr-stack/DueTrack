@@ -1,5 +1,7 @@
 import SwiftUI
 import CoreData
+import EventKit
+
 struct SettingsView: View {
     @EnvironmentObject var notificationViewModel: NotificationViewModel
     @ObservedObject private var themeManager = ThemeManager.shared
@@ -11,6 +13,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             List {
+                // MARK: Appearance
                 Section(header: Text("Appearance")) {
                     Toggle(isOn: $themeManager.isDarkMode) {
                         HStack {
@@ -19,10 +22,11 @@ struct SettingsView: View {
                         }
                     }
                     .onChange(of: themeManager.isDarkMode) { _ in
-                        // Theme change is handled automatically by SwiftUI
+                        // Theme change handled automatically by SwiftUI
                     }
                 }
                 
+                // MARK: Notifications
                 Section(header: Text("Notifications")) {
                     HStack {
                         Text("Notifications")
@@ -73,6 +77,34 @@ struct SettingsView: View {
                     }
                 }
                 
+                // MARK: Calendar
+                Section(header: Text("Calendar")) {
+                    Toggle(isOn: Binding(
+                        get: { CalendarSyncManager.isSyncEnabled },
+                        set: { newValue in
+                            // Update stored state immediately so the toggle UI moves
+                            CalendarSyncManager.isSyncEnabled = newValue
+                            
+                            Task {
+                                if newValue {
+                                    // Best effort: ask for access / ensure calendar exists,
+                                    // then sync. If access is denied, this will just no-op.
+                                    _ = await CalendarSyncManager.requestAccessIfNeeded()
+                                    await syncBillsToCalendar()
+                                } else {
+                                    CalendarSyncManager.clearCalendar()
+                                }
+                            }
+                        }
+                    )) {
+                        HStack {
+                            Image(systemName: "calendar")
+                            Text("Sync bills to Calendar")
+                        }
+                    }
+                }
+                
+                // MARK: Help
                 Section(header: Text("Help")) {
                     Button(action: {
                         showOnboarding = true
@@ -84,6 +116,7 @@ struct SettingsView: View {
                     }
                 }
                 
+                // MARK: About
                 Section(header: Text("About")) {
                     HStack {
                         Text("Version")
@@ -108,6 +141,21 @@ struct SettingsView: View {
                     isPresented: $showNotificationTimePicker
                 )
             }
+        }
+    }
+    
+    // MARK: - Calendar Sync Helper
+    
+    private func syncBillsToCalendar() async {
+        let context = CoreDataManager.shared.viewContext
+        let request: NSFetchRequest<Bill> = Bill.fetchRequest()
+        request.predicate = NSPredicate(format: "isActive == YES")
+        
+        do {
+            let bills = try context.fetch(request)
+            await CalendarSyncManager.syncAllBills(bills)
+        } catch {
+            print("SettingsView: failed to fetch bills for calendar sync: \(error)")
         }
     }
 }
@@ -162,7 +210,6 @@ struct NotificationTimePickerView: View {
         settings.notificationHour = selectedHour
         settings.notificationMinute = selectedMinute
         
-        // Reschedule all notifications for active bills using the new time
         Task {
             let coreDataManager = CoreDataManager.shared
             let context = coreDataManager.viewContext
@@ -180,5 +227,3 @@ struct NotificationTimePickerView: View {
         isPresented = false
     }
 }
-
-
