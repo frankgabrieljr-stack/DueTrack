@@ -13,10 +13,10 @@ struct UpcomingBillsDetailView: View {
                     Text("Upcoming Bills")
                         .font(.caption)
                         .foregroundColor(.adaptiveSecondaryText)
-                    Text("\(billViewModel.upcomingBillsWithinDays().count) bills")
+                    Text("\(billViewModel.upcomingBillsWithinDays(14).count) bills")
                         .font(.system(size: 32, weight: .bold))
                         .foregroundColor(.upcomingYellow)
-                    Text("Due within the next 30 days")
+                    Text("Due within the next 14 days")
                         .font(.caption)
                         .foregroundColor(.adaptiveSecondaryText)
                 }
@@ -25,7 +25,7 @@ struct UpcomingBillsDetailView: View {
                 .cardStyle()
                 
                 // Bills List
-                let upcomingBills = billViewModel.upcomingBillsWithinDays()
+                let upcomingBills = billViewModel.upcomingBillsWithinDays(14)
                 
                 if upcomingBills.isEmpty {
                     VStack(spacing: 16) {

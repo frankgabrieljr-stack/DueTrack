@@ -29,6 +29,10 @@ struct WeekBillSnapshot: Codable {
     /// Whether this specific occurrence has been marked paid.
     /// Optional for backward compatibility with older stored snapshots.
     let isPaid: Bool?
+
+    var rowId: String {
+        "\(billId?.uuidString ?? name)-\(dueDate.timeIntervalSince1970)"
+    }
 }
 
 enum WidgetShared {
@@ -346,7 +350,7 @@ struct DueTrackThisWeekWidgetEntryView: View {
                     .font(.footnote)
                     .foregroundColor(.secondary)
             } else {
-                ForEach(todayBills.prefix(3), id: \.name) { bill in
+                ForEach(todayBills.prefix(3), id: \.rowId) { bill in
                     let isPaid = bill.isPaid ?? false
                     Text(bill.name)
                         .font(.subheadline)
@@ -406,7 +410,7 @@ struct DueTrackThisWeekWidgetEntryView: View {
                     .font(.footnote)
                     .foregroundColor(.secondary)
             } else {
-                ForEach(bills.prefix(3), id: \.name) { bill in
+                ForEach(bills.prefix(3), id: \.rowId) { bill in
                     let isPaid = bill.isPaid ?? false
                     Text(bill.name)
                         .font(.subheadline)

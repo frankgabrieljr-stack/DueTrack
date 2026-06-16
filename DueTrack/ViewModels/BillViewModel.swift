@@ -114,6 +114,7 @@ class BillViewModel: ObservableObject {
     }
     
     // MARK: - Delete Bill
+    @discardableResult
     func deleteBill(_ bill: Bill) -> Bool {
         if let id = bill.id {
             NotificationManager.shared.cancelNotifications(for: id)
@@ -188,7 +189,55 @@ class BillViewModel: ObservableObject {
     }
     
     func overdueAmount() -> Double {
-        return billsByStatus(.overdue).reduce(0) { $0 + $1.amount }
+        return bills.reduce(0) { total, bill in
+            total + (bill.amount * Double(unpaidOverdueOccurrences(for: bill).count))
+        }
+    }
+
+    func overdueOccurrenceCount() -> Int {
+        return bills.reduce(0) { $0 + unpaidOverdueOccurrences(for: $1).count }
+    }
+
+    private func unpaidOverdueOccurrences(for bill: Bill, upTo date: Date = Date()) -> [Date] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: date)
+        let frequency = BillFrequency(rawValue: bill.frequency) ?? .monthly
+        let startDate = bill.createdDate ?? today
+        let customInterval = frequency == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil
+        let customUnit = frequency == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil
+        let payments = Array((bill.payments as? Set<Payment>) ?? [])
+
+        var occurrences: [Date] = []
+        var occurrence = calendar.startOfDay(for: startDate)
+        var safetyCounter = 0
+
+        while occurrence < today && safetyCounter < 1000 {
+            let isPaid = DateHelpers.isOccurrencePaid(
+                occurrenceDate: occurrence,
+                frequency: frequency,
+                payments: payments,
+                customInterval: customInterval,
+                customUnit: customUnit
+            )
+
+            if !isPaid {
+                occurrences.append(occurrence)
+            }
+
+            let next = DateHelpers.nextOccurrence(
+                from: occurrence,
+                frequency: frequency,
+                customInterval: customInterval,
+                customUnit: customUnit
+            )
+            if next <= occurrence {
+                break
+            }
+            occurrence = calendar.startOfDay(for: next)
+            safetyCounter += 1
+        }
+
+        return occurrences
     }
     
     // MARK: - Bills Due in Next Week
@@ -258,15 +307,14 @@ class BillViewModel: ObservableObject {
         return billsByStatus(.overdue)
     }
     
-    func upcomingBillsWithinDays(_ days: Int = 30) -> [Bill] {
+    func upcomingBillsWithinDays(_ days: Int = 14) -> [Bill] {
         let calendar = Calendar.current
-        let today = Date()
+        let today = calendar.startOfDay(for: Date())
         let futureDate = calendar.date(byAdding: .day, value: days, to: today) ?? today
         
         return bills.filter { bill in
-            let nextDue = bill.nextDueDate
-            let status = bill.paymentStatus
-            return (status == .upcoming || status == .overdue) && nextDue <= futureDate
+            let nextDue = calendar.startOfDay(for: bill.nextDueDate)
+            return nextDue >= today && nextDue <= futureDate
         }.sorted { $0.nextDueDate < $1.nextDueDate }
     }
     

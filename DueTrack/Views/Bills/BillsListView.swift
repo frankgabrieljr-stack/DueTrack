@@ -79,7 +79,7 @@ struct BillsListView: View {
     
     private func deleteBills(at offsets: IndexSet) {
         for index in offsets {
-            billViewModel.deleteBill(filteredBills[index])
+            _ = billViewModel.deleteBill(filteredBills[index])
         }
     }
 }
@@ -110,7 +110,7 @@ struct BillRowView: View {
                     Text("•")
                         .foregroundColor(.adaptiveSecondaryText)
                     
-                    Text("Due \(DateHelpers.formatDate(bill.nextDueDate))")
+                    Text(dueDateLabel)
                         .font(.caption)
                         .foregroundColor(.adaptiveSecondaryText)
                 }
@@ -128,7 +128,19 @@ struct BillRowView: View {
 }
 
 private extension BillRowView {
+    var dueDateLabel: String {
+        if uiStatus == .overdue {
+            return "Overdue since \(DateHelpers.formatDate(bill.nextDueDate))"
+        }
+
+        return "Due \(DateHelpers.formatDate(bill.nextDueDate))"
+    }
+
     var uiStatus: PaymentStatus {
+        if bill.paymentStatus == .overdue {
+            return .overdue
+        }
+
         if paymentViewModel.paymentForCurrentPeriod(for: bill) != nil {
             return .paid
         }

@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreData
 
 struct DashboardView: View {
     @EnvironmentObject var billViewModel: BillViewModel
@@ -45,7 +46,7 @@ struct DashboardView: View {
                     }
                 } else {
                     // List view: show stats + searchable bill list
-                    DashboardBillsListView(selectedView: $selectedView)
+                    DashboardBillsListView(selectedView: $selectedView, selectedMonth: selectedMonth)
                 }
             }
             .navigationTitle("Dashboard")
@@ -155,12 +156,12 @@ struct QuickStatsView: View {
             HStack(spacing: 20) {
                 StatCard(
                     title: "Upcoming",
-                    value: "\(billViewModel.upcomingBills().count)",
+                    value: "\(billViewModel.upcomingBillsWithinDays(14).count)",
                     color: .upcomingYellow,
                     destination: AnyView(UpcomingBillsDetailView())
                 )
                 .accessibilityLabel("Open Upcoming bills")
-                .accessibilityHint("Shows bills due in the next 30 days")
+                .accessibilityHint("Shows bills due in the next 14 days")
                 
                 StatCard(
                     title: "Overdue",
@@ -168,6 +169,15 @@ struct QuickStatsView: View {
                     color: .overdueRed,
                     destination: AnyView(OverdueBillsDetailView())
                 )
+                .if(billViewModel.overdueAmount() > 0) { view in
+                    view
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.overdueRed.opacity(0.8), lineWidth: 2)
+                        )
+                        .shadow(color: Color.overdueRed.opacity(0.35), radius: 10, x: 0, y: 0)
+                        .shadow(color: Color.overdueRed.opacity(0.2), radius: 20, x: 0, y: 0)
+                }
                 .accessibilityLabel("Open Overdue bills")
                 .accessibilityHint("Shows bills that are past due")
             }
@@ -175,7 +185,7 @@ struct QuickStatsView: View {
             // Third row: Paid this month
             HStack(spacing: 20) {
                 StatCard(
-                    title: "Paid This Month",
+                    title: "Paid",
                     value: paymentViewModel.totalPaidForMonth(for: selectedMonth).currencyString(),
                     color: .accentGreen,
                     destination: AnyView(PaidBillsDetailView(selectedMonth: selectedMonth)),
@@ -200,12 +210,23 @@ struct UpcomingWeekBillsView: View {
     }
     
     private func isBillPaidForDate(_ bill: Bill, dueDate: Date) -> Bool {
-        let calendar = Calendar.current
-        return paymentViewModel.paymentHistory(for: bill).contains { payment in
-            // Check if payment is for this specific occurrence
-            calendar.isDate(payment.datePaid, inSameDayAs: dueDate) ||
-            (payment.datePaid <= dueDate && payment.datePaid > calendar.date(byAdding: .month, value: -1, to: dueDate)!)
-        }
+        let frequency = BillFrequency(rawValue: bill.frequency) ?? .monthly
+        let payments = paymentViewModel.paymentHistory(for: bill)
+        let customInterval = frequency == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil
+        let customUnit = frequency == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil
+        return DateHelpers.isOccurrencePaid(
+            occurrenceDate: dueDate,
+            frequency: frequency,
+            payments: payments,
+            customInterval: customInterval,
+            customUnit: customUnit
+        )
+    }
+
+    private func latestPayment(for bill: Bill) -> Payment? {
+        paymentViewModel.paymentHistory(for: bill)
+            .sorted { $0.datePaid > $1.datePaid }
+            .first
     }
     
     var body: some View {
@@ -224,8 +245,9 @@ struct UpcomingWeekBillsView: View {
                         .foregroundColor(.adaptiveSecondaryText)
                 }
                 
-                ForEach(Array(upcomingBills.prefix(5)), id: \.bill.id) { item in
+                ForEach(Array(upcomingBills.prefix(5)), id: \.bill.objectID) { item in
                     let isPaid = isBillPaidForDate(item.bill, dueDate: item.nextDueDate)
+                    let latestPayment = latestPayment(for: item.bill)
                     
                     NavigationLink(destination: BillDetailView(bill: item.bill)) {
                         HStack(spacing: 12) {
@@ -290,6 +312,12 @@ struct UpcomingWeekBillsView: View {
                                             .font(.caption)
                                             .foregroundColor(isPaid ? .accentGreen : .adaptiveSecondaryText)
                                     }
+                                }
+
+                                if !isPaid, let latestPayment {
+                                    Text("Last paid \(DateHelpers.formatDate(latestPayment.datePaid))")
+                                        .font(.caption2)
+                                        .foregroundColor(.adaptiveSecondaryText)
                                 }
                             }
                             
@@ -366,6 +394,7 @@ struct DashboardBillsListView: View {
     @EnvironmentObject var billViewModel: BillViewModel
     @EnvironmentObject var paymentViewModel: PaymentViewModel
     @Binding var selectedView: DashboardView.DashboardViewType
+    let selectedMonth: Date
     
     @State private var searchText = ""
     @State private var filterCategory: BillCategory?
@@ -387,8 +416,8 @@ struct DashboardBillsListView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                // Quick Stats - use current month in list mode
-                QuickStatsView(selectedMonth: Date())
+                // Quick Stats - use the same selected month as calendar mode
+                QuickStatsView(selectedMonth: selectedMonth)
                     .padding()
                     .background(Color.adaptiveBackground)
                 

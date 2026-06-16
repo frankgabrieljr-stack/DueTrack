@@ -6,6 +6,10 @@ struct BillDetailView: View {
     @EnvironmentObject var paymentViewModel: PaymentViewModel
     @State private var showingPaymentSheet = false
     @State private var showingEditSheet = false
+    @State private var showingAlreadyPaidToast = false
+    @State private var paymentDueDateForSheet = Date()
+    @State private var paymentPaidDateForSheet = Date()
+    @State private var overdueCountForSheet = 0
     
     var body: some View {
         ScrollView {
@@ -48,7 +52,7 @@ struct BillDetailView: View {
                         Spacer()
                         
                         VStack(alignment: .trailing) {
-                            Text("Next Due")
+                            Text(headerDueLabel)
                                 .font(.caption)
                                 .fontWeight(.medium)
                                 .foregroundColor(.adaptiveSecondaryText)
@@ -68,13 +72,57 @@ struct BillDetailView: View {
                             .font(.subheadline)
                             .foregroundColor(Color(hex: currentStatus.color))
                     }
+
+                    if currentStatus == .overdue, let overdueSince = oldestUnpaidOverdueDate {
+                        Text("Unpaid since \(DateHelpers.formatDate(overdueSince))")
+                            .font(.caption)
+                            .foregroundColor(.adaptiveSecondaryText)
+                    }
+
+                    if let lastPaidDate = lastPaymentDate {
+                        Text("Last paid \(DateHelpers.formatDate(lastPaidDate))")
+                            .font(.caption)
+                            .foregroundColor(.adaptiveSecondaryText)
+                    }
+
+                    if let paidThroughDate = paidThroughDate, currentStatus != .paid {
+                        Text("Paid through \(DateHelpers.formatDate(paidThroughDate)); next unpaid bill is due \(DateHelpers.formatDate(bill.nextDueDate)).")
+                            .font(.caption)
+                            .foregroundColor(.adaptiveSecondaryText)
+                    }
+
+                    if currentStatus == .overdue, paymentViewModel.paymentForCurrentPeriod(for: bill) != nil {
+                        Text("A recent payment was recorded, but an older bill is still unpaid.")
+                            .font(.caption)
+                            .foregroundColor(.adaptiveSecondaryText)
+                    }
                 }
                 .padding()
                 .cardStyle()
                 
                 // Quick Actions
                 VStack(spacing: 12) {
-                    if paymentViewModel.isBillPaid(bill) {
+                    let overdueOccurrences = paymentViewModel.unpaidOverdueOccurrences(for: bill)
+                    if !overdueOccurrences.isEmpty {
+                        Button(action: {
+                            if let oldestOverdueDate = overdueOccurrences.first {
+                                paymentDueDateForSheet = oldestOverdueDate
+                                paymentPaidDateForSheet = Date()
+                                overdueCountForSheet = overdueOccurrences.count
+                                showingPaymentSheet = true
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                Text(overdueOccurrences.count == 1 ? "Mark Overdue Paid" : "Mark All Overdue Paid")
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.accentGreen)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                        }
+                    } else if paymentViewModel.isBillPaid(bill) {
                         // Bill is paid - show "Mark Unpaid" button
                         Button(action: {
                             paymentViewModel.unmarkBillAsPaid(bill)
@@ -93,10 +141,19 @@ struct BillDetailView: View {
                         }
                     } else {
                         // Bill is not paid - show "Mark Paid" button
-                        Button(action: { showingPaymentSheet = true }) {
+                        Button(action: {
+                            if paymentViewModel.paymentForCurrentPeriod(for: bill) != nil && bill.paymentStatus != .overdue {
+                                showAlreadyPaidToast()
+                            } else {
+                                paymentDueDateForSheet = bill.nextDueDate
+                                paymentPaidDateForSheet = Date()
+                                overdueCountForSheet = 0
+                                showingPaymentSheet = true
+                            }
+                        }) {
                             HStack {
                                 Image(systemName: "checkmark.circle.fill")
-                                Text("Mark Paid")
+                                Text(lastPaymentDate == nil ? "Mark Paid" : "Pay Next Due")
                             }
                             .frame(maxWidth: .infinity)
                             .padding()
@@ -143,10 +200,29 @@ struct BillDetailView: View {
             }
             .padding()
         }
+        .overlay(alignment: .bottom) {
+            if showingAlreadyPaidToast {
+                Text("Already paid for this period")
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color.black.opacity(0.85))
+                    .cornerRadius(10)
+                    .padding(.bottom, 20)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
         .navigationTitle(bill.name)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingPaymentSheet) {
-            PaymentSheet(bill: bill)
+            PaymentSheet(
+                bill: bill,
+                dueDate: paymentDueDateForSheet,
+                initialPaymentDate: paymentPaidDateForSheet,
+                isOverdue: overdueCountForSheet > 0,
+                overdueCount: overdueCountForSheet
+            )
         }
         .sheet(isPresented: $showingEditSheet) {
             EditBillView(bill: bill)
@@ -155,8 +231,23 @@ struct BillDetailView: View {
 }
 
 private extension BillDetailView {
+    func showAlreadyPaidToast() {
+        withAnimation {
+            showingAlreadyPaidToast = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+            withAnimation {
+                showingAlreadyPaidToast = false
+            }
+        }
+    }
+
     /// UI-facing status that prioritizes "Paid" when there's a current-period payment.
     var currentStatus: PaymentStatus {
+        if bill.paymentStatus == .overdue {
+            return .overdue
+        }
+
         if paymentViewModel.paymentForCurrentPeriod(for: bill) != nil {
             return .paid
         }
@@ -182,6 +273,64 @@ private extension BillDetailView {
         case .future: return "Future"
         }
     }
+
+    var headerDueLabel: String {
+        currentStatus == .overdue ? "Overdue Since" : "Next Due"
+    }
+
+    var lastPaymentDate: Date? {
+        paymentViewModel.paymentHistory(for: bill)
+            .map { $0.datePaid }
+            .sorted(by: >)
+            .first
+    }
+
+    var paidThroughDate: Date? {
+        paymentViewModel.paymentHistory(for: bill)
+            .map { $0.effectiveDueDate }
+            .sorted(by: >)
+            .first
+    }
+
+    var oldestUnpaidOverdueDate: Date? {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let freq = BillFrequency(rawValue: bill.frequency) ?? .monthly
+        let startDate = bill.createdDate ?? today
+        let customIntervalValue = freq == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil
+        let customUnitValue = freq == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil
+        let payments = paymentViewModel.paymentHistory(for: bill)
+
+        var occurrence = startDate
+        var safetyCounter = 0
+        while occurrence < today && safetyCounter < 1000 {
+            let isPaid = DateHelpers.isOccurrencePaid(
+                occurrenceDate: occurrence,
+                frequency: freq,
+                payments: payments,
+                customInterval: customIntervalValue,
+                customUnit: customUnitValue
+            )
+
+            if !isPaid {
+                return occurrence
+            }
+
+            let next = DateHelpers.nextOccurrence(
+                from: occurrence,
+                frequency: freq,
+                customInterval: customIntervalValue,
+                customUnit: customUnitValue
+            )
+            if next <= occurrence {
+                break
+            }
+            occurrence = next
+            safetyCounter += 1
+        }
+
+        return nil
+    }
 }
 
 struct PaymentHistoryView: View {
@@ -189,6 +338,8 @@ struct PaymentHistoryView: View {
     @EnvironmentObject var paymentViewModel: PaymentViewModel
     @State private var showingDeleteConfirmation = false
     @State private var paymentToDelete: Payment?
+    @State private var paymentToEdit: Payment?
+    @State private var showingEditSheet = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -222,7 +373,7 @@ struct PaymentHistoryView: View {
                                     .foregroundColor(.adaptiveText)
                                 
                                 if payment.id == currentPeriodPayment?.id {
-                                    Text("(Current Period)")
+                                    Text("Current period")
                                         .font(.caption)
                                         .fontWeight(.medium)
                                         .foregroundColor(.accentGreen)
@@ -231,11 +382,28 @@ struct PaymentHistoryView: View {
                                         .background(Color.accentGreen.opacity(0.15))
                                         .cornerRadius(4)
                                 }
+
+                                if payment.wasPaidLate {
+                                    Text("Late")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.overdueRed)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.overdueRed.opacity(0.15))
+                                        .cornerRadius(4)
+                                }
                             }
                             
-                            Text(DateHelpers.formatDate(payment.datePaid))
-                                .font(.caption)
-                                .foregroundColor(.adaptiveSecondaryText)
+                            if payment.dueDate != nil {
+                                Text("Due \(DateHelpers.formatDate(payment.effectiveDueDate)) • Paid \(DateHelpers.formatDate(payment.datePaid))")
+                                    .font(.caption)
+                                    .foregroundColor(.adaptiveSecondaryText)
+                            } else {
+                                Text("Paid \(DateHelpers.formatDate(payment.datePaid))")
+                                    .font(.caption)
+                                    .foregroundColor(.adaptiveSecondaryText)
+                            }
                         }
                         
                         Spacer()
@@ -245,17 +413,23 @@ struct PaymentHistoryView: View {
                                 .font(.caption)
                                 .foregroundColor(.adaptiveSecondaryText)
                         }
-                        
-                        // Delete button for current period payment
-                        if payment.id == currentPeriodPayment?.id {
-                            Button(action: {
-                                paymentToDelete = payment
-                                showingDeleteConfirmation = true
-                            }) {
-                                Image(systemName: "trash")
-                                    .foregroundColor(.overdueRed)
-                                    .padding(8)
-                            }
+
+                        Button(action: {
+                            paymentToEdit = payment
+                            showingEditSheet = true
+                        }) {
+                            Image(systemName: "pencil")
+                                .foregroundColor(.primaryBlue)
+                                .padding(8)
+                        }
+
+                        Button(action: {
+                            paymentToDelete = payment
+                            showingDeleteConfirmation = true
+                        }) {
+                            Image(systemName: "trash")
+                                .foregroundColor(.overdueRed)
+                                .padding(8)
                         }
                     }
                     .padding()
@@ -273,25 +447,66 @@ struct PaymentHistoryView: View {
                 }
             }
         } message: {
-            Text("This will mark the bill as unpaid for the current period.")
+            Text("This will remove the payment from history and adjust totals.")
+        }
+        .sheet(isPresented: $showingEditSheet) {
+            if let payment = paymentToEdit {
+                PaymentEditSheet(payment: payment)
+                    .environmentObject(paymentViewModel)
+            }
         }
     }
 }
 
 struct PaymentSheet: View {
     let bill: Bill
+    let dueDate: Date
+    let initialPaymentDate: Date
+    let isOverdue: Bool
+    let overdueCount: Int
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var paymentViewModel: PaymentViewModel
     
     @State private var amount = ""
     @State private var notes = ""
+    @State private var selectedDueDate: Date
+    @State private var datePaid: Date
     @State private var isSaving = false
     @State private var showingError = false
     @State private var errorMessage = ""
+    @State private var showingAlreadyPaidToast = false
+    @State private var toastMessage = "Already paid for this period"
+
+    init(
+        bill: Bill,
+        dueDate: Date = Date(),
+        initialPaymentDate: Date = Date(),
+        isOverdue: Bool = false,
+        overdueCount: Int = 0
+    ) {
+        self.bill = bill
+        self.dueDate = dueDate
+        self.initialPaymentDate = initialPaymentDate
+        self.isOverdue = isOverdue
+        self.overdueCount = overdueCount
+        _selectedDueDate = State(initialValue: dueDate)
+        _datePaid = State(initialValue: initialPaymentDate)
+    }
     
     var body: some View {
         NavigationView {
             Form {
+                if isOverdue {
+                    Section {
+                        let countText = overdueCount == 1 ? "1 overdue bill" : "\(overdueCount) overdue bills"
+                        Text("This will mark \(countText) as paid.")
+                            .font(.caption)
+                            .foregroundColor(.adaptiveSecondaryText)
+                        Text("Oldest due date: \(DateHelpers.formatDate(dueDate))")
+                            .font(.caption)
+                            .foregroundColor(.adaptiveSecondaryText)
+                    }
+                }
                 Section(header: Text("Payment Amount")) {
                     HStack {
                         Text("Amount")
@@ -301,10 +516,32 @@ struct PaymentSheet: View {
                             .multilineTextAlignment(.trailing)
                     }
                 }
+
+                if !isOverdue {
+                    Section(header: Text("Bill Due Date")) {
+                        DatePicker(
+                            "Apply To",
+                            selection: $selectedDueDate,
+                            displayedComponents: .date
+                        )
+
+                        Text("Use this to pay an upcoming bill early.")
+                            .font(.caption)
+                            .foregroundColor(.adaptiveSecondaryText)
+                    }
+                }
                 
                 Section(header: Text("Notes (Optional)")) {
                     TextEditor(text: $notes)
                         .frame(height: 100)
+                }
+
+                Section(header: Text("Payment Date")) {
+                    DatePicker(
+                        "Paid On",
+                        selection: $datePaid,
+                        displayedComponents: .date
+                    )
                 }
             }
             .navigationTitle("Mark as Paid")
@@ -335,10 +572,35 @@ struct PaymentSheet: View {
                         .background(Color.black.opacity(0.3))
                 }
             }
+            .overlay(alignment: .bottom) {
+                if showingAlreadyPaidToast {
+                    Text(toastMessage)
+                        .font(.subheadline)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Color.black.opacity(0.85))
+                        .cornerRadius(10)
+                        .padding(.bottom, 20)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
         }
     }
     
     private func savePayment() {
+        if isOverdue {
+            if overdueCount == 0 {
+                toastMessage = "No overdue bills to mark"
+                showToast()
+                return
+            }
+        } else if paymentViewModel.paymentExists(for: bill, on: selectedDueDate) != nil {
+            toastMessage = "Already paid for this period"
+            showToast()
+            return
+        }
+
         let paymentAmount: Double
         if amount.isEmpty {
             paymentAmount = bill.amount
@@ -351,8 +613,23 @@ struct PaymentSheet: View {
         }
         
         isSaving = true
-        
-        let success = paymentViewModel.markBillAsPaid(bill, amount: paymentAmount, notes: notes.isEmpty ? nil : notes)
+        let success: Bool
+        if isOverdue {
+            success = paymentViewModel.markAllOverdueAsPaid(
+                bill,
+                paidOn: datePaid,
+                amount: paymentAmount,
+                notes: notes.isEmpty ? nil : notes
+            )
+        } else {
+            success = paymentViewModel.markBillAsPaid(
+                bill,
+                on: selectedDueDate,
+                paidOn: datePaid,
+                amount: paymentAmount,
+                notes: notes.isEmpty ? nil : notes
+            )
+        }
         
         // Small delay to ensure save completes
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -368,6 +645,136 @@ struct PaymentSheet: View {
                 dismiss()
             } else {
                 errorMessage = "Failed to save payment. Please try again."
+                showingError = true
+            }
+        }
+    }
+
+    private func showToast() {
+        withAnimation {
+            showingAlreadyPaidToast = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+            withAnimation {
+                showingAlreadyPaidToast = false
+            }
+        }
+    }
+}
+
+struct PaymentEditSheet: View {
+    let payment: Payment
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var paymentViewModel: PaymentViewModel
+
+    @State private var amount: String
+    @State private var notes: String
+    @State private var dueDate: Date
+    @State private var datePaid: Date
+    @State private var isSaving = false
+    @State private var showingError = false
+    @State private var errorMessage = ""
+
+    init(payment: Payment) {
+        self.payment = payment
+        _amount = State(initialValue: String(format: "%.2f", payment.amount))
+        _notes = State(initialValue: payment.notes ?? "")
+        _dueDate = State(initialValue: payment.effectiveDueDate)
+        _datePaid = State(initialValue: payment.datePaid)
+    }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Payment Amount")) {
+                    HStack {
+                        Text("Amount")
+                        Spacer()
+                        TextField("0.00", text: $amount)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+
+                Section(header: Text("Bill Due Date")) {
+                    DatePicker(
+                        "Due On",
+                        selection: $dueDate,
+                        displayedComponents: .date
+                    )
+                }
+
+                Section(header: Text("Payment Date")) {
+                    DatePicker(
+                        "Date Paid",
+                        selection: $datePaid,
+                        displayedComponents: .date
+                    )
+                }
+
+                Section(header: Text("Notes (Optional)")) {
+                    TextEditor(text: $notes)
+                        .frame(height: 100)
+                }
+            }
+            .navigationTitle("Edit Payment")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        savePayment()
+                    }
+                    .disabled(isSaving)
+                }
+            }
+            .alert("Error", isPresented: $showingError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorMessage)
+            }
+            .overlay {
+                if isSaving {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.black.opacity(0.3))
+                }
+            }
+        }
+    }
+
+    private func savePayment() {
+        let paymentAmount: Double
+        if amount.isEmpty {
+            paymentAmount = payment.amount
+        } else if let amountValue = Double(amount), amountValue > 0 {
+            paymentAmount = amountValue
+        } else {
+            errorMessage = "Please enter a valid amount greater than 0"
+            showingError = true
+            return
+        }
+
+        isSaving = true
+        let success = paymentViewModel.updatePayment(
+            payment,
+            amount: paymentAmount,
+            datePaid: datePaid,
+            dueDate: dueDate,
+            notes: notes.isEmpty ? nil : notes
+        )
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            isSaving = false
+            if success {
+                dismiss()
+            } else {
+                errorMessage = "Failed to update payment. Please try again."
                 showingError = true
             }
         }

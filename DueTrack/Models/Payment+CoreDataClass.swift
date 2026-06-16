@@ -16,8 +16,17 @@ extension Payment {
     @NSManaged public var billId: UUID?
     @NSManaged public var amount: Double
     @NSManaged public var datePaid: Date
+    @NSManaged public var dueDate: Date?
     @NSManaged public var isPaid: Bool
     @NSManaged public var notes: String?
     @NSManaged public var bill: Bill?
+
+    public var effectiveDueDate: Date {
+        dueDate ?? datePaid
+    }
+
+    public var wasPaidLate: Bool {
+        Calendar.current.startOfDay(for: datePaid) > Calendar.current.startOfDay(for: effectiveDueDate)
+    }
 }
 

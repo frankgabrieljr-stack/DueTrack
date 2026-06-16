@@ -9,6 +9,8 @@ class CoreDataManager {
         
         // Enable CloudKit if needed
         let description = container.persistentStoreDescriptions.first
+        description?.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
+        description?.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
         description?.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
         description?.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
         
@@ -32,6 +34,7 @@ class CoreDataManager {
     }
     
     // MARK: - Save Context
+    @discardableResult
     func save() -> Bool {
         let context = persistentContainer.viewContext
         

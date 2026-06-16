@@ -29,7 +29,6 @@ extension Bill {
     // Computed property for next due date
     public var nextDueDate: Date {
         let freq = BillFrequency(rawValue: frequency) ?? .monthly
-        let calendar = Calendar.current
         let today = Date()
         let paymentsSet = (payments as? Set<Payment>) ?? []
         let paymentsArray = Array(paymentsSet)

@@ -230,9 +230,8 @@ public struct DateHelpers {
         }
     }
     
-    /// Determine if a given bill occurrence is considered paid, based on its frequency and payments.
-    /// A payment counts for an occurrence if it is marked paid and its date falls between the
-    /// occurrence date (inclusive) and the next occurrence (inclusive).
+    /// Determine if a bill occurrence is paid.
+    /// New payments match by `dueDate`; older payments fall back to their saved `datePaid`.
     static func isOccurrencePaid(
         occurrenceDate: Date,
         frequency: BillFrequency,
@@ -246,10 +245,15 @@ public struct DateHelpers {
             customInterval: customInterval,
             customUnit: customUnit
         )
+        let calendar = Calendar.current
         return payments.contains { payment in
-            payment.isPaid &&
-            payment.datePaid >= occurrenceDate &&
-            payment.datePaid <= next
+            guard payment.isPaid else { return false }
+
+            if let dueDate = payment.dueDate {
+                return calendar.isDate(dueDate, inSameDayAs: occurrenceDate)
+            }
+
+            return payment.datePaid >= occurrenceDate && payment.datePaid <= next
         }
     }
 }

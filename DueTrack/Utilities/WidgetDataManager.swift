@@ -84,16 +84,7 @@ enum WidgetDataManager {
             .sorted { $0.nextDueDate < $1.nextDueDate }
             .prefix(5)
             .map { pair in
-                // Consider this occurrence paid if either:
-                // - there's a payment recorded on that specific date, OR
-                // - the bill is in "paid" status and this occurrence is today.
-                let calendar = Calendar.current
-                let paidByHistory = isBillPaidForDate(pair.bill, dueDate: pair.nextDueDate)
-                let paidByStatus =
-                    pair.bill.paymentStatus == .paid &&
-                    calendar.isDate(pair.nextDueDate, inSameDayAs: Date())
-                
-                let paidForDate = paidByHistory || paidByStatus
+                let paidForDate = isBillPaidForDate(pair.bill, dueDate: pair.nextDueDate)
                 
                 return WeekBillSnapshot(
                     billId: pair.bill.id,
@@ -133,12 +124,15 @@ enum WidgetDataManager {
 
     /// Helper: check if a given bill occurrence (for a specific due date) has been paid.
     private static func isBillPaidForDate(_ bill: Bill, dueDate: Date) -> Bool {
-        let calendar = Calendar.current
+        let frequency = BillFrequency(rawValue: bill.frequency) ?? .monthly
         let paymentsSet = (bill.payments as? Set<Payment>) ?? []
-
-        return paymentsSet.contains { payment in
-            calendar.isDate(payment.datePaid, inSameDayAs: dueDate)
-        }
+        return DateHelpers.isOccurrencePaid(
+            occurrenceDate: dueDate,
+            frequency: frequency,
+            payments: Array(paymentsSet),
+            customInterval: frequency == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil,
+            customUnit: frequency == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil
+        )
     }
 }
 

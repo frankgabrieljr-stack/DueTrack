@@ -99,9 +99,22 @@ struct PaidBillRow: View {
             }
             
             VStack(alignment: .leading, spacing: 4) {
-                Text(bill?.name ?? "Bill")
-                    .font(.headline)
-                    .foregroundColor(.adaptiveText)
+                HStack(spacing: 6) {
+                    Text(bill?.name ?? "Bill")
+                        .font(.headline)
+                        .foregroundColor(.adaptiveText)
+
+                    if payment.wasPaidLate {
+                        Text("Late")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(.overdueRed)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.overdueRed.opacity(0.15))
+                            .cornerRadius(4)
+                    }
+                }
                 
                 HStack(spacing: 4) {
                     Text(payment.amount.currencyString())
@@ -111,7 +124,16 @@ struct PaidBillRow: View {
                     Text("•")
                         .foregroundColor(.adaptiveSecondaryText)
                     
-                    Text(DateHelpers.formatDate(payment.datePaid))
+                    if payment.dueDate != nil {
+                        Text("Due \(DateHelpers.formatDate(payment.effectiveDueDate))")
+                            .font(.caption)
+                            .foregroundColor(.adaptiveSecondaryText)
+
+                        Text("•")
+                            .foregroundColor(.adaptiveSecondaryText)
+                    }
+
+                    Text("Paid \(DateHelpers.formatDate(payment.datePaid))")
                         .font(.caption)
                         .foregroundColor(.adaptiveSecondaryText)
                 }

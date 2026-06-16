@@ -16,7 +16,7 @@ struct OverdueBillsDetailView: View {
                     Text(billViewModel.overdueAmount().currencyString())
                         .font(.system(size: 32, weight: .bold))
                         .foregroundColor(.overdueRed)
-                    Text("\(billViewModel.overdueBills().count) bills")
+                    Text("\(billViewModel.overdueOccurrenceCount()) overdue occurrence\(billViewModel.overdueOccurrenceCount() == 1 ? "" : "s") across \(billViewModel.overdueBills().count) bill\(billViewModel.overdueBills().count == 1 ? "" : "s")")
                         .font(.caption)
                         .foregroundColor(.adaptiveSecondaryText)
                 }
@@ -56,6 +56,9 @@ struct OverdueBillsDetailView: View {
         }
         .navigationTitle("Overdue Bills")
         .navigationBarTitleDisplayMode(.large)
+        .onAppear {
+            paymentViewModel.fetchAllPayments()
+        }
         .sheet(isPresented: Binding(get: { selectedBill != nil }, set: { if !$0 { selectedBill = nil } })) {
             if let bill = selectedBill {
                 BillDetailView(bill: bill)

@@ -48,6 +48,7 @@ class CloudKitSyncManager {
         }
         record["amount"] = payment.amount
         record["datePaid"] = payment.datePaid
+        record["dueDate"] = payment.dueDate
         record["isPaid"] = payment.isPaid
         record["notes"] = payment.notes
         

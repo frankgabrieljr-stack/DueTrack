@@ -230,7 +230,9 @@ struct CalendarGridView: View {
                 let isPaid = DateHelpers.isOccurrencePaid(
                     occurrenceDate: occurrenceDate,
                     frequency: frequency,
-                    payments: paymentViewModel.paymentHistory(for: bill)
+                    payments: paymentViewModel.paymentHistory(for: bill),
+                    customInterval: frequency == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil,
+                    customUnit: frequency == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil
                 )
                 
                 if !isPaid {
@@ -266,7 +268,9 @@ struct CalendarGridView: View {
                 let isPaid = DateHelpers.isOccurrencePaid(
                     occurrenceDate: occurrenceDate,
                     frequency: freq,
-                    payments: paymentViewModel.paymentHistory(for: bill)
+                    payments: paymentViewModel.paymentHistory(for: bill),
+                    customInterval: freq == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil,
+                    customUnit: freq == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil
                 )
                 if !isPaid {
                     return true
@@ -357,6 +361,7 @@ struct BillsForDateView: View {
     let date: Date
     @EnvironmentObject var billViewModel: BillViewModel
     @EnvironmentObject var paymentViewModel: PaymentViewModel
+    @State private var showingAlreadyPaidToast = false
     
     private var occurrencesForDate: [(bill: Bill, occurrenceDate: Date)] {
         billViewModel.billOccurrences(for: date)
@@ -393,16 +398,41 @@ struct BillsForDateView: View {
                 .frame(maxWidth: .infinity)
                 .padding()
             } else {
-                ForEach(occurrencesForDate, id: \.occurrenceDate) { item in
+                ForEach(Array(occurrencesForDate.enumerated()), id: \.offset) { _, item in
                     let paid = isBillPaid(on: item.occurrenceDate, for: item.bill)
                     NavigationLink(destination: BillDetailView(bill: item.bill)) {
                         BillOccurrenceRowView(
                             bill: item.bill,
                             occurrenceDate: item.occurrenceDate,
-                            isPaidForOccurrence: paid
+                            isPaidForOccurrence: paid,
+                            onAlreadyPaid: showAlreadyPaidToast
                         )
                     }
                 }
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if showingAlreadyPaidToast {
+                Text("Already paid for this period")
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color.black.opacity(0.85))
+                    .cornerRadius(10)
+                    .padding(.bottom, 20)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+    }
+
+    private func showAlreadyPaidToast() {
+        withAnimation {
+            showingAlreadyPaidToast = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+            withAnimation {
+                showingAlreadyPaidToast = false
             }
         }
     }
@@ -412,6 +442,7 @@ struct BillOccurrenceRowView: View {
     let bill: Bill
     let occurrenceDate: Date
     let isPaidForOccurrence: Bool
+    let onAlreadyPaid: () -> Void
     @EnvironmentObject var paymentViewModel: PaymentViewModel
     @State private var isSaving = false
     
@@ -474,6 +505,10 @@ struct BillOccurrenceRowView: View {
     
     private func markOccurrenceAsPaid() {
         guard !isSaving else { return }
+        if paymentViewModel.paymentExists(for: bill, on: occurrenceDate) != nil {
+            onAlreadyPaid()
+            return
+        }
         isSaving = true
         let success = paymentViewModel.markBillAsPaid(bill, on: occurrenceDate)
         
