@@ -351,28 +351,13 @@ struct PaymentTrendCard: View {
 
     private func matchingPayment(for bill: Bill, occurrenceDate: Date) -> Payment? {
         let frequency = BillFrequency(rawValue: bill.frequency) ?? .monthly
-        let next = DateHelpers.nextOccurrence(
-            from: occurrenceDate,
+        return DateHelpers.matchingPayment(
+            for: occurrenceDate,
             frequency: frequency,
+            payments: paymentViewModel.paymentHistory(for: bill),
             customInterval: frequency == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil,
             customUnit: frequency == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil
         )
-
-        let payments = paymentViewModel.paymentHistory(for: bill)
-        let calendar = Calendar.current
-
-        if let payment = payments
-            .filter({ $0.dueDate != nil && calendar.isDate($0.effectiveDueDate, inSameDayAs: occurrenceDate) })
-            .sorted(by: { $0.datePaid < $1.datePaid })
-            .first
-        {
-            return payment
-        }
-
-        return payments
-            .filter { $0.dueDate == nil && $0.datePaid >= occurrenceDate && $0.datePaid <= next }
-            .sorted(by: { $0.datePaid < $1.datePaid })
-            .first
     }
 }
 
@@ -668,7 +653,7 @@ struct UpcomingBillsCard: View {
     }
 
     private func dateLabel(for bill: Bill) -> String {
-        if bill.paymentStatus == .overdue {
+        if !billViewModel.unpaidOverdueOccurrences(for: bill).isEmpty {
             return "Overdue since \(DateHelpers.formatDate(bill.nextDueDate))"
         }
 
@@ -698,10 +683,11 @@ struct UpcomingBillsCard: View {
                 .padding(.vertical, 20)
             } else {
                 ForEach(upcomingBills, id: \.id) { bill in
+                    let isOverdue = !billViewModel.unpaidOverdueOccurrences(for: bill).isEmpty
                     HStack(spacing: 12) {
                         // Status indicator
                         Circle()
-                            .fill(Color(hex: bill.paymentStatus.color))
+                            .fill(Color(hex: (isOverdue ? PaymentStatus.overdue : bill.paymentStatus).color))
                             .frame(width: 8, height: 8)
                         
                         VStack(alignment: .leading, spacing: 4) {
@@ -711,7 +697,7 @@ struct UpcomingBillsCard: View {
                                 .foregroundColor(.adaptiveText)
                             Text(dateLabel(for: bill))
                                 .font(.caption)
-                                .foregroundColor(.adaptiveSecondaryText)
+                                .foregroundColor(isOverdue ? .overdueRed : .adaptiveSecondaryText)
                         }
                         
                         Spacer()
@@ -719,7 +705,7 @@ struct UpcomingBillsCard: View {
                         Text(bill.amount.currencyString())
                             .font(.subheadline)
                             .fontWeight(.bold)
-                            .foregroundColor(.adaptiveText)
+                            .foregroundColor(isOverdue ? .overdueRed : .adaptiveText)
                     }
                     .padding(.vertical, 8)
                     .padding(.horizontal, 4)

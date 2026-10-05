@@ -45,12 +45,21 @@ enum WidgetDataManager {
             return
         }
         
+        let frequency = BillFrequency(rawValue: nextBill.frequency) ?? .monthly
+        let isOverdue = !DateHelpers.unpaidOverdueOccurrences(
+            startDate: nextBill.createdDate ?? Date(),
+            frequency: frequency,
+            payments: nextBill.resolvedPayments,
+            customInterval: frequency == .custom && nextBill.customInterval > 0 ? Int(nextBill.customInterval) : nil,
+            customUnit: frequency == .custom ? CustomRecurrenceUnit(rawValue: nextBill.customUnit ?? "") : nil
+        ).isEmpty
+
         let snapshot = NextBillSnapshot(
             billId: nextBill.id,
             name: nextBill.name,
             amount: nextBill.amount,
             dueDate: nextBill.nextDueDate,
-            isOverdue: nextBill.paymentStatus == .overdue
+            isOverdue: isOverdue
         )
         
         do {
@@ -84,14 +93,22 @@ enum WidgetDataManager {
             .sorted { $0.nextDueDate < $1.nextDueDate }
             .prefix(5)
             .map { pair in
+                let frequency = BillFrequency(rawValue: pair.bill.frequency) ?? .monthly
                 let paidForDate = isBillPaidForDate(pair.bill, dueDate: pair.nextDueDate)
+                let isOverdue = !DateHelpers.unpaidOverdueOccurrences(
+                    startDate: pair.bill.createdDate ?? Date(),
+                    frequency: frequency,
+                    payments: pair.bill.resolvedPayments,
+                    customInterval: frequency == .custom && pair.bill.customInterval > 0 ? Int(pair.bill.customInterval) : nil,
+                    customUnit: frequency == .custom ? CustomRecurrenceUnit(rawValue: pair.bill.customUnit ?? "") : nil
+                ).isEmpty
                 
                 return WeekBillSnapshot(
                     billId: pair.bill.id,
                     name: pair.bill.name,
                     amount: pair.bill.amount,
                     dueDate: pair.nextDueDate,
-                    isOverdue: pair.bill.paymentStatus == .overdue,
+                    isOverdue: isOverdue,
                     category: pair.bill.category,
                     isPaid: paidForDate
                 )
@@ -125,11 +142,10 @@ enum WidgetDataManager {
     /// Helper: check if a given bill occurrence (for a specific due date) has been paid.
     private static func isBillPaidForDate(_ bill: Bill, dueDate: Date) -> Bool {
         let frequency = BillFrequency(rawValue: bill.frequency) ?? .monthly
-        let paymentsSet = (bill.payments as? Set<Payment>) ?? []
         return DateHelpers.isOccurrencePaid(
             occurrenceDate: dueDate,
             frequency: frequency,
-            payments: Array(paymentsSet),
+            payments: bill.resolvedPayments,
             customInterval: frequency == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil,
             customUnit: frequency == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil
         )

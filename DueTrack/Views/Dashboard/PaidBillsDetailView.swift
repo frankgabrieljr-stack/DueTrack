@@ -125,7 +125,7 @@ struct PaidBillRow: View {
                         .foregroundColor(.adaptiveSecondaryText)
                     
                     if payment.dueDate != nil {
-                        Text("Due \(DateHelpers.formatDate(payment.effectiveDueDate))")
+                        Text("Due \(DateHelpers.formatDate(payment.coveredScheduledDueDate))")
                             .font(.caption)
                             .foregroundColor(.adaptiveSecondaryText)
 

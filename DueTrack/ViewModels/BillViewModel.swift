@@ -27,7 +27,10 @@ class BillViewModel: ObservableObject {
             isLoading = false
             // Update widget snapshots whenever bills are refreshed
             WidgetDataManager.updateNextBillSnapshot(from: bills)
-            WidgetDataManager.updateThisWeekSnapshot(from: billsDueInNextWeek())
+            let overduePairs = overdueBillItems().map { ($0.bill, $0.overdueSince) }
+            let overdueIDs = Set(overduePairs.map { $0.0.objectID })
+            let weekPairs = billsDueInNextWeek().filter { !overdueIDs.contains($0.bill.objectID) }
+            WidgetDataManager.updateThisWeekSnapshot(from: overduePairs + weekPairs)
         } catch {
             errorMessage = "Failed to fetch bills: \(error.localizedDescription)"
             isLoading = false
@@ -138,10 +141,13 @@ class BillViewModel: ObservableObject {
     }
     
     func upcomingBills() -> [Bill] {
-        return bills.filter { bill in
-            let status = bill.paymentStatus
-            return status == .upcoming || status == .overdue
+        let overdue = overdueBillItems().map(\.bill)
+        let overdueIDs = Set(overdue.map(\.objectID))
+        let upcoming = bills.filter { bill in
+            !overdueIDs.contains(bill.objectID) && bill.paymentStatus == .upcoming
         }
+        .sorted { $0.nextDueDate < $1.nextDueDate }
+        return overdue + upcoming
     }
     
     // MARK: - Statistics
@@ -198,46 +204,26 @@ class BillViewModel: ObservableObject {
         return bills.reduce(0) { $0 + unpaidOverdueOccurrences(for: $1).count }
     }
 
-    private func unpaidOverdueOccurrences(for bill: Bill, upTo date: Date = Date()) -> [Date] {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: date)
+    func unpaidOverdueOccurrences(for bill: Bill, upTo date: Date = Date()) -> [Date] {
         let frequency = BillFrequency(rawValue: bill.frequency) ?? .monthly
-        let startDate = bill.createdDate ?? today
-        let customInterval = frequency == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil
-        let customUnit = frequency == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil
-        let payments = Array((bill.payments as? Set<Payment>) ?? [])
+        return DateHelpers.unpaidOverdueOccurrences(
+            startDate: bill.createdDate ?? date,
+            frequency: frequency,
+            payments: bill.resolvedPayments,
+            customInterval: frequency == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil,
+            customUnit: frequency == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil,
+            upTo: date
+        )
+    }
 
-        var occurrences: [Date] = []
-        var occurrence = calendar.startOfDay(for: startDate)
-        var safetyCounter = 0
-
-        while occurrence < today && safetyCounter < 1000 {
-            let isPaid = DateHelpers.isOccurrencePaid(
-                occurrenceDate: occurrence,
-                frequency: frequency,
-                payments: payments,
-                customInterval: customInterval,
-                customUnit: customUnit
-            )
-
-            if !isPaid {
-                occurrences.append(occurrence)
-            }
-
-            let next = DateHelpers.nextOccurrence(
-                from: occurrence,
-                frequency: frequency,
-                customInterval: customInterval,
-                customUnit: customUnit
-            )
-            if next <= occurrence {
-                break
-            }
-            occurrence = calendar.startOfDay(for: next)
-            safetyCounter += 1
+    /// Overdue bills with their oldest unpaid due date, oldest first.
+    func overdueBillItems() -> [(bill: Bill, overdueSince: Date, overdueCount: Int)] {
+        bills.compactMap { bill in
+            let overdueDates = unpaidOverdueOccurrences(for: bill)
+            guard let oldest = overdueDates.first else { return nil }
+            return (bill: bill, overdueSince: oldest, overdueCount: overdueDates.count)
         }
-
-        return occurrences
+        .sorted { $0.overdueSince < $1.overdueSince }
     }
     
     // MARK: - Bills Due in Next Week
@@ -299,12 +285,13 @@ class BillViewModel: ObservableObject {
     func monthlyBills() -> [Bill] {
         return bills.filter { bill in
             let frequency = BillFrequency(rawValue: bill.frequency) ?? .monthly
-            return frequency == .monthly || frequency == .biWeekly || frequency == .weekly
+            return frequency == .monthly || frequency == .oneTime || frequency == .biWeekly || frequency == .weekly
         }
     }
     
     func overdueBills() -> [Bill] {
-        return billsByStatus(.overdue)
+        // Use occurrence-based detection so the list matches overdue amount/count.
+        return overdueBillItems().map(\.bill)
     }
     
     func upcomingBillsWithinDays(_ days: Int = 14) -> [Bill] {
@@ -321,6 +308,7 @@ class BillViewModel: ObservableObject {
     // MARK: - Notification Observers
     private func setupNotificationObservers() {
         NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.fetchBills()
             }

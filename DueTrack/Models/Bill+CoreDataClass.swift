@@ -25,17 +25,34 @@ extension Bill {
     @NSManaged public var payments: NSSet?
     @NSManaged public var customInterval: Int32
     @NSManaged public var customUnit: String?
+
+    /// Payments linked by relationship and/or `billId` (keeps status/calendar in sync).
+    var resolvedPayments: [Payment] {
+        var result = Array((payments as? Set<Payment>) ?? [])
+        guard let billId = id, let context = managedObjectContext else {
+            return result
+        }
+
+        let request: NSFetchRequest<Payment> = Payment.fetchRequest()
+        request.predicate = NSPredicate(format: "billId == %@", billId as CVarArg)
+        if let fetched = try? context.fetch(request) {
+            for payment in fetched where !result.contains(where: { $0.objectID == payment.objectID }) {
+                result.append(payment)
+            }
+        }
+        return result
+    }
     
     // Computed property for next due date
     public var nextDueDate: Date {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
         let freq = BillFrequency(rawValue: frequency) ?? .monthly
-        let today = Date()
-        let paymentsSet = (payments as? Set<Payment>) ?? []
-        let paymentsArray = Array(paymentsSet)
+        let paymentsArray = resolvedPayments
         let customIntervalValue = freq == .custom && customInterval > 0 ? Int(customInterval) : nil
         let customUnitValue = freq == .custom ? CustomRecurrenceUnit(rawValue: customUnit ?? "") : nil
         
-        var candidate = createdDate ?? Date()
+        var candidate = calendar.startOfDay(for: createdDate ?? Date())
         var safetyCounter = 0
         
         // Advance through occurrences until we find the first unpaid one
@@ -61,28 +78,27 @@ extension Bill {
             )
             // Safety: break if next didn't advance
             if next <= candidate {
-                break
+                // One-time bills, or a schedule that cannot advance, stay on this date.
+                return candidate
             }
-            candidate = next
+            candidate = calendar.startOfDay(for: next)
             safetyCounter += 1
         }
         
-        // Fallback: if something goes wrong, treat today as next due
-        return max(candidate, today)
+        return candidate
     }
     
     // Computed property for payment status
     public var paymentStatus: PaymentStatus {
         let calendar = Calendar.current
-        let today = Date()
+        let today = calendar.startOfDay(for: Date())
         let freq = BillFrequency(rawValue: frequency) ?? .monthly
-        let paymentsSet = (payments as? Set<Payment>) ?? []
-        let paymentsArray = Array(paymentsSet)
+        let paymentsArray = resolvedPayments
         let customIntervalValue = freq == .custom && customInterval > 0 ? Int(customInterval) : nil
         let customUnitValue = freq == .custom ? CustomRecurrenceUnit(rawValue: customUnit ?? "") : nil
         
         // 1. Check for any unpaid occurrence in the past → Overdue
-        var occurrence = createdDate ?? Date()
+        var occurrence = calendar.startOfDay(for: createdDate ?? Date())
         var safetyCounter = 0
         while occurrence < today && safetyCounter < 1000 {
             let isPaid = DateHelpers.isOccurrencePaid(
@@ -106,14 +122,14 @@ extension Bill {
             if next <= occurrence {
                 break
             }
-            occurrence = next
+            occurrence = calendar.startOfDay(for: next)
             safetyCounter += 1
         }
         
         // At this point, all past occurrences are paid (or none exist).
         // Determine "current period" occurrence on or before today.
-        var lastOccurrenceOnOrBeforeToday = createdDate ?? Date()
-        occurrence = createdDate ?? Date()
+        var lastOccurrenceOnOrBeforeToday = calendar.startOfDay(for: createdDate ?? Date())
+        occurrence = lastOccurrenceOnOrBeforeToday
         safetyCounter = 0
         while occurrence <= today && safetyCounter < 1000 {
             lastOccurrenceOnOrBeforeToday = occurrence
@@ -126,7 +142,7 @@ extension Bill {
             if next <= occurrence {
                 break
             }
-            occurrence = next
+            occurrence = calendar.startOfDay(for: next)
             safetyCounter += 1
         }
         
@@ -167,7 +183,7 @@ extension Bill {
             if next <= nextUnpaid {
                 break
             }
-            nextUnpaid = next
+            nextUnpaid = calendar.startOfDay(for: next)
             safetyCounter += 1
         }
         
@@ -208,6 +224,7 @@ public enum BillFrequency: String, CaseIterable {
     case weekly = "weekly"
     case biWeekly = "bi-weekly"
     case monthly = "monthly"
+    case oneTime = "one-time"
     case quarterly = "quarterly"
     case annual = "annual"
     case custom = "custom"
@@ -217,6 +234,7 @@ public enum BillFrequency: String, CaseIterable {
         case .weekly: return "Weekly"
         case .biWeekly: return "Bi-weekly"
         case .monthly: return "Monthly"
+        case .oneTime: return "One Time"
         case .quarterly: return "Quarterly"
         case .annual: return "Annual"
         case .custom: return "Custom"

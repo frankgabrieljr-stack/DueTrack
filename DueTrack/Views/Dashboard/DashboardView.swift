@@ -129,6 +129,9 @@ struct QuickStatsView: View {
     
     var body: some View {
         VStack(spacing: 16) {
+            // Touch payments so overdue/remaining cards refresh after Mark Paid.
+            let _ = paymentViewModel.payments
+            
             // First row: Monthly and Remaining cards
             HStack(spacing: 20) {
                 StatCard(
@@ -195,8 +198,97 @@ struct QuickStatsView: View {
                 .accessibilityHint("Shows all payments recorded in the selected month")
             }
             
-            // Upcoming Bills in Next Week Section
+            // Priority: overdue first, then this week's bills
+            OverduePriorityBillsView()
             UpcomingWeekBillsView()
+        }
+    }
+}
+
+struct OverduePriorityBillsView: View {
+    @EnvironmentObject var billViewModel: BillViewModel
+    @EnvironmentObject var paymentViewModel: PaymentViewModel
+
+    private var overdueItems: [(bill: Bill, overdueSince: Date, overdueCount: Int)] {
+        // Depend on payments so this section refreshes immediately after Mark Overdue Paid.
+        _ = paymentViewModel.payments
+        return billViewModel.overdueBillItems()
+    }
+
+    var body: some View {
+        if !overdueItems.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Past Due")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.adaptiveText)
+
+                    Spacer()
+
+                    Text("\(overdueItems.count) bill\(overdueItems.count == 1 ? "" : "s")")
+                        .font(.subheadline)
+                        .foregroundColor(.overdueRed)
+                }
+
+                ForEach(Array(overdueItems.prefix(5)), id: \.bill.objectID) { item in
+                    NavigationLink(destination: BillDetailView(bill: item.bill)) {
+                        HStack(spacing: 12) {
+                            Image(systemName: BillCategory(rawValue: item.bill.category)?.icon ?? "ellipsis.circle.fill")
+                                .foregroundColor(.overdueRed)
+                                .font(.title3)
+                                .frame(width: 32, height: 32)
+                                .background(Color.overdueRed.opacity(0.12))
+                                .clipShape(Circle())
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 6) {
+                                    Text(item.bill.name)
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.adaptiveText)
+
+                                    Text("Overdue")
+                                        .font(.caption2)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.overdueRed)
+                                        .cornerRadius(4)
+                                }
+
+                                Text("Since \(DateHelpers.formatDate(item.overdueSince))")
+                                    .font(.caption)
+                                    .foregroundColor(.overdueRed)
+
+                                if item.overdueCount > 1 {
+                                    Text("\(item.overdueCount) unpaid occurrences")
+                                        .font(.caption2)
+                                        .foregroundColor(.adaptiveSecondaryText)
+                                }
+                            }
+
+                            Spacer()
+
+                            Text((item.bill.amount * Double(item.overdueCount)).currencyString())
+                                .font(.subheadline)
+                                .fontWeight(.bold)
+                                .foregroundColor(.overdueRed)
+                                .monospacedDigit()
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 4)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding()
+            .cardStyle()
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.overdueRed.opacity(0.35), lineWidth: 1.5)
+            )
         }
     }
 }
@@ -206,7 +298,10 @@ struct UpcomingWeekBillsView: View {
     @EnvironmentObject var paymentViewModel: PaymentViewModel
     
     private var upcomingBills: [(bill: Bill, nextDueDate: Date)] {
-        billViewModel.billsDueInNextWeek()
+        // Keep overdue bills in the Past Due section only.
+        _ = paymentViewModel.payments
+        let overdueIDs = Set(billViewModel.overdueBillItems().map(\.bill.objectID))
+        return billViewModel.billsDueInNextWeek().filter { !overdueIDs.contains($0.bill.objectID) }
     }
     
     private func isBillPaidForDate(_ bill: Bill, dueDate: Date) -> Bool {

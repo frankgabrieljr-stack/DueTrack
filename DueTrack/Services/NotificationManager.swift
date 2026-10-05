@@ -114,6 +114,18 @@ class NotificationManager: ObservableObject {
         // Clear existing overdue alerts for this bill before rescheduling
         cancelOverdueNotifications(for: billId, daysAhead: daysAhead)
 
+        let frequency = BillFrequency(rawValue: bill.frequency) ?? .monthly
+        let alreadyPaid = DateHelpers.isOccurrencePaid(
+            occurrenceDate: nextDueDate,
+            frequency: frequency,
+            payments: bill.resolvedPayments,
+            customInterval: frequency == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil,
+            customUnit: frequency == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil
+        )
+        if alreadyPaid {
+            return
+        }
+
         // Overdue starts the day after the due date
         guard let overdueStart = calendar.date(byAdding: .day, value: 1, to: nextDueDate) else {
             return

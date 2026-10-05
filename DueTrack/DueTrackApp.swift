@@ -71,6 +71,9 @@ struct ContentView: View {
                 showOnboarding = shouldShow
             }
         }
+        .onOpenURL { url in
+            _ = DeepLinkRouter.shared.handle(url)
+        }
     }
 }
 
@@ -94,7 +97,13 @@ class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        // Handle notification tap if needed
+        let userInfo = response.notification.request.content.userInfo
+        if let billIdString = userInfo["billId"] as? String,
+           let billId = UUID(uuidString: billIdString) {
+            DispatchQueue.main.async {
+                DeepLinkRouter.shared.pendingBillID = billId
+            }
+        }
         completionHandler()
     }
 }

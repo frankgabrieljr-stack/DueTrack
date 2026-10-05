@@ -85,7 +85,9 @@ struct BillDetailView: View {
                             .foregroundColor(.adaptiveSecondaryText)
                     }
 
-                    if let paidThroughDate = paidThroughDate, currentStatus != .paid {
+                    if let paidThroughDate = paidThroughDate,
+                       currentStatus == .overdue,
+                       paidThroughDate < bill.nextDueDate {
                         Text("Paid through \(DateHelpers.formatDate(paidThroughDate)); next unpaid bill is due \(DateHelpers.formatDate(bill.nextDueDate)).")
                             .font(.caption)
                             .foregroundColor(.adaptiveSecondaryText)
@@ -142,7 +144,8 @@ struct BillDetailView: View {
                     } else {
                         // Bill is not paid - show "Mark Paid" button
                         Button(action: {
-                            if paymentViewModel.paymentForCurrentPeriod(for: bill) != nil && bill.paymentStatus != .overdue {
+                            if paymentViewModel.paymentForCurrentPeriod(for: bill) != nil
+                                && paymentViewModel.unpaidOverdueOccurrences(for: bill).isEmpty {
                                 showAlreadyPaidToast()
                             } else {
                                 paymentDueDateForSheet = bill.nextDueDate
@@ -178,9 +181,9 @@ struct BillDetailView: View {
                 .padding(.horizontal)
                 
                 // Payment History
-                PaymentHistoryView(bill: bill)
+                    PaymentHistoryView(bill: bill)
                     .onAppear {
-                        paymentViewModel.fetchPayments(for: bill.id)
+                        paymentViewModel.fetchAllPayments()
                     }
                 
                 // Notes
@@ -215,7 +218,10 @@ struct BillDetailView: View {
         }
         .navigationTitle(bill.name)
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showingPaymentSheet) {
+        .sheet(isPresented: $showingPaymentSheet, onDismiss: {
+            paymentViewModel.fetchAllPayments()
+            billViewModel.fetchBills()
+        }) {
             PaymentSheet(
                 bill: bill,
                 dueDate: paymentDueDateForSheet,
@@ -223,6 +229,8 @@ struct BillDetailView: View {
                 isOverdue: overdueCountForSheet > 0,
                 overdueCount: overdueCountForSheet
             )
+            .environmentObject(billViewModel)
+            .environmentObject(paymentViewModel)
         }
         .sheet(isPresented: $showingEditSheet) {
             EditBillView(bill: bill)
@@ -242,23 +250,24 @@ private extension BillDetailView {
         }
     }
 
-    /// UI-facing status that prioritizes "Paid" when there's a current-period payment.
+    /// UI-facing status aligned with occurrence-based overdue/paid checks.
     var currentStatus: PaymentStatus {
-        if bill.paymentStatus == .overdue {
+        if !paymentViewModel.unpaidOverdueOccurrences(for: bill).isEmpty {
             return .overdue
         }
 
-        if paymentViewModel.paymentForCurrentPeriod(for: bill) != nil {
+        if paymentViewModel.isBillPaid(bill) || paymentViewModel.paymentForCurrentPeriod(for: bill) != nil {
             return .paid
         }
         
-        let nextDue = bill.nextDueDate
-        let today = Date()
+        let calendar = Calendar.current
+        let nextDue = calendar.startOfDay(for: bill.nextDueDate)
+        let today = calendar.startOfDay(for: Date())
         if nextDue < today {
             return .overdue
         }
         
-        let daysUntil = Calendar.current.dateComponents([.day], from: today, to: nextDue).day ?? 0
+        let daysUntil = calendar.dateComponents([.day], from: today, to: nextDue).day ?? 0
         if daysUntil <= 7 && daysUntil >= 0 {
             return .upcoming
         }
@@ -293,43 +302,7 @@ private extension BillDetailView {
     }
 
     var oldestUnpaidOverdueDate: Date? {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        let freq = BillFrequency(rawValue: bill.frequency) ?? .monthly
-        let startDate = bill.createdDate ?? today
-        let customIntervalValue = freq == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil
-        let customUnitValue = freq == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil
-        let payments = paymentViewModel.paymentHistory(for: bill)
-
-        var occurrence = startDate
-        var safetyCounter = 0
-        while occurrence < today && safetyCounter < 1000 {
-            let isPaid = DateHelpers.isOccurrencePaid(
-                occurrenceDate: occurrence,
-                frequency: freq,
-                payments: payments,
-                customInterval: customIntervalValue,
-                customUnit: customUnitValue
-            )
-
-            if !isPaid {
-                return occurrence
-            }
-
-            let next = DateHelpers.nextOccurrence(
-                from: occurrence,
-                frequency: freq,
-                customInterval: customIntervalValue,
-                customUnit: customUnitValue
-            )
-            if next <= occurrence {
-                break
-            }
-            occurrence = next
-            safetyCounter += 1
-        }
-
-        return nil
+        paymentViewModel.unpaidOverdueOccurrences(for: bill).first
     }
 }
 
@@ -396,7 +369,7 @@ struct PaymentHistoryView: View {
                             }
                             
                             if payment.dueDate != nil {
-                                Text("Due \(DateHelpers.formatDate(payment.effectiveDueDate)) • Paid \(DateHelpers.formatDate(payment.datePaid))")
+                                Text("Due \(DateHelpers.formatDate(payment.coveredScheduledDueDate)) • Paid \(DateHelpers.formatDate(payment.datePaid))")
                                     .font(.caption)
                                     .foregroundColor(.adaptiveSecondaryText)
                             } else {
@@ -465,6 +438,7 @@ struct PaymentSheet: View {
     let isOverdue: Bool
     let overdueCount: Int
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var billViewModel: BillViewModel
     @EnvironmentObject var paymentViewModel: PaymentViewModel
     
     @State private var amount = ""
@@ -639,9 +613,9 @@ struct PaymentSheet: View {
                 let generator = UINotificationFeedbackGenerator()
                 generator.notificationOccurred(.success)
                 
-                // Refresh payments after saving (both for this bill and all payments for dashboard)
-                paymentViewModel.fetchPayments(for: bill.id)
+                // Refresh both view models so Dashboard + Bills update immediately
                 paymentViewModel.fetchAllPayments()
+                billViewModel.fetchBills()
                 dismiss()
             } else {
                 errorMessage = "Failed to save payment. Please try again."
@@ -852,6 +826,12 @@ struct EditBillView: View {
                     .datePickerStyle(.graphical)
                     
                     Toggle("AutoPay", isOn: $isAutoPay)
+                    
+                    if frequency == .oneTime {
+                        Text("This bill is due once, on the start date, and does not repeat.")
+                            .font(.caption)
+                            .foregroundColor(.adaptiveSecondaryText)
+                    }
                     
                     if frequency == .custom {
                         HStack {

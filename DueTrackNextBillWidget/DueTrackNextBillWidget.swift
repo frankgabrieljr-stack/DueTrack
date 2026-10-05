@@ -60,6 +60,11 @@ enum WidgetShared {
         }
         return try? JSONDecoder().decode([WeekBillSnapshot].self, from: data)
     }
+
+    static func billURL(for billId: UUID?) -> URL? {
+        guard let billId else { return nil }
+        return URL(string: "duetrack://bill/\(billId.uuidString)")
+    }
 }
 
 // MARK: - Timeline (Next Bill)
@@ -105,16 +110,19 @@ struct DueTrackNextBillWidgetEntryView: View {
     @Environment(\.widgetFamily) private var family
 
     var body: some View {
-        switch family {
-        case .accessoryInline:
-            accessoryInline
-        case .accessoryRectangular:
-            accessoryRectangular
-        case .accessoryCircular:
-            accessoryCircular
-        default:
-            standardBody
+        Group {
+            switch family {
+            case .accessoryInline:
+                accessoryInline
+            case .accessoryRectangular:
+                accessoryRectangular
+            case .accessoryCircular:
+                accessoryCircular
+            default:
+                standardBody
+            }
         }
+        .widgetURL(WidgetShared.billURL(for: entry.snapshot?.billId))
     }
 
     // MARK: Standard (Home Screen) layout
@@ -351,16 +359,12 @@ struct DueTrackThisWeekWidgetEntryView: View {
                     .foregroundColor(.secondary)
             } else {
                 ForEach(todayBills.prefix(3), id: \.rowId) { bill in
-                    let isPaid = bill.isPaid ?? false
-                    Text(bill.name)
-                        .font(.subheadline)
-                        .foregroundColor(isPaid ? .secondary : Color.categoryColor(for: bill.category))
-                        .strikethrough(isPaid)
-                        .lineLimit(1)
+                    billRow(bill)
                 }
             }
         }
         .padding()
+        .widgetURL(WidgetShared.billURL(for: todayBills.first?.billId))
     }
 
     // MARK: - Medium: Today & Tomorrow
@@ -389,6 +393,7 @@ struct DueTrackThisWeekWidgetEntryView: View {
             )
         }
         .padding()
+        .widgetURL(WidgetShared.billURL(for: (todayBills + tomorrowBills).first?.billId))
     }
 
     private func dayColumn(
@@ -411,14 +416,27 @@ struct DueTrackThisWeekWidgetEntryView: View {
                     .foregroundColor(.secondary)
             } else {
                 ForEach(bills.prefix(3), id: \.rowId) { bill in
-                    let isPaid = bill.isPaid ?? false
-                    Text(bill.name)
-                        .font(.subheadline)
-                        .foregroundColor(isPaid ? .secondary : Color.categoryColor(for: bill.category))
-                        .strikethrough(isPaid)
-                        .lineLimit(1)
+                    billRow(bill)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func billRow(_ bill: WeekBillSnapshot) -> some View {
+        let isPaid = bill.isPaid ?? false
+        let label = Text(bill.name)
+            .font(.subheadline)
+            .foregroundColor(isPaid ? .secondary : Color.categoryColor(for: bill.category))
+            .strikethrough(isPaid)
+            .lineLimit(1)
+
+        if let url = WidgetShared.billURL(for: bill.billId) {
+            Link(destination: url) {
+                label
+            }
+        } else {
+            label
         }
     }
 }

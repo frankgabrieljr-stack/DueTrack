@@ -75,6 +75,9 @@ public struct DateHelpers {
                 nextDate = calendar.date(from: components) ?? date
             }
             return nextDate
+
+        case .oneTime:
+            return calendar.startOfDay(for: date)
             
         case .custom:
             // For custom, assume monthly for now
@@ -118,6 +121,11 @@ public struct DateHelpers {
         let calendar = Calendar.current
         let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: month))!
         let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startOfMonth)!
+        
+        if frequency == .oneTime {
+            let day = calendar.startOfDay(for: startDate)
+            return (day >= startOfMonth && day <= endOfMonth) ? [day] : []
+        }
         
         var occurrences: [Date] = []
         
@@ -212,6 +220,9 @@ public struct DateHelpers {
             return calendar.date(byAdding: .month, value: 3, to: date) ?? date
         case .annual:
             return calendar.date(byAdding: .year, value: 1, to: date) ?? date
+        case .oneTime:
+            // Does not recur. Callers stop when the next date does not advance.
+            return date
         case .custom:
             guard let interval = customInterval, let unit = customUnit else {
                 // Fallback to monthly if custom data missing
@@ -239,6 +250,23 @@ public struct DateHelpers {
         customInterval: Int? = nil,
         customUnit: CustomRecurrenceUnit? = nil
     ) -> Bool {
+        matchingPayment(
+            for: occurrenceDate,
+            frequency: frequency,
+            payments: payments,
+            customInterval: customInterval,
+            customUnit: customUnit
+        ) != nil
+    }
+
+    /// First payment that covers a scheduled occurrence (same rules as `isOccurrencePaid`).
+    static func matchingPayment(
+        for occurrenceDate: Date,
+        frequency: BillFrequency,
+        payments: [Payment],
+        customInterval: Int? = nil,
+        customUnit: CustomRecurrenceUnit? = nil
+    ) -> Payment? {
         let next = nextOccurrence(
             from: occurrenceDate,
             frequency: frequency,
@@ -246,15 +274,98 @@ public struct DateHelpers {
             customUnit: customUnit
         )
         let calendar = Calendar.current
-        return payments.contains { payment in
-            guard payment.isPaid else { return false }
+        let start = calendar.startOfDay(for: occurrenceDate)
+        let nextDay = calendar.startOfDay(for: next)
+        // Late payments are often saved on the day they were paid, which sits
+        // after the real due date and before the next one. That still covers this occurrence.
+        let end = nextDay > start ? nextDay : Date.distantFuture
 
-            if let dueDate = payment.dueDate {
-                return calendar.isDate(dueDate, inSameDayAs: occurrenceDate)
+        return payments
+            .filter { payment in
+                guard payment.isPaid else { return false }
+                let anchor = calendar.startOfDay(for: payment.dueDate ?? payment.datePaid)
+                return anchor >= start && anchor < end
+            }
+            .sorted { $0.datePaid < $1.datePaid }
+            .first
+    }
+
+    /// Scheduled occurrence whose period contains `date`.
+    /// Paying on Aug 10 for a bill due Aug 8 resolves back to Aug 8.
+    static func scheduledOccurrence(
+        containing date: Date,
+        startDate: Date,
+        frequency: BillFrequency,
+        customInterval: Int? = nil,
+        customUnit: CustomRecurrenceUnit? = nil
+    ) -> Date {
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: date)
+        var occurrence = calendar.startOfDay(for: startDate)
+        if day <= occurrence {
+            return occurrence
+        }
+
+        var safetyCounter = 0
+        while safetyCounter < 1000 {
+            let next = nextOccurrence(
+                from: occurrence,
+                frequency: frequency,
+                customInterval: customInterval,
+                customUnit: customUnit
+            )
+            let nextDay = calendar.startOfDay(for: next)
+            if nextDay <= occurrence || day < nextDay {
+                return occurrence
+            }
+            occurrence = nextDay
+            safetyCounter += 1
+        }
+        return occurrence
+    }
+
+    /// Unpaid scheduled occurrences strictly before today (start of day).
+    static func unpaidOverdueOccurrences(
+        startDate: Date,
+        frequency: BillFrequency,
+        payments: [Payment],
+        customInterval: Int? = nil,
+        customUnit: CustomRecurrenceUnit? = nil,
+        upTo date: Date = Date()
+    ) -> [Date] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: date)
+        var occurrences: [Date] = []
+        var occurrence = calendar.startOfDay(for: startDate)
+        var safetyCounter = 0
+
+        while occurrence < today && safetyCounter < 1000 {
+            let isPaid = isOccurrencePaid(
+                occurrenceDate: occurrence,
+                frequency: frequency,
+                payments: payments,
+                customInterval: customInterval,
+                customUnit: customUnit
+            )
+
+            if !isPaid {
+                occurrences.append(occurrence)
             }
 
-            return payment.datePaid >= occurrenceDate && payment.datePaid <= next
+            let next = nextOccurrence(
+                from: occurrence,
+                frequency: frequency,
+                customInterval: customInterval,
+                customUnit: customUnit
+            )
+            if next <= occurrence {
+                break
+            }
+            occurrence = calendar.startOfDay(for: next)
+            safetyCounter += 1
         }
+
+        return occurrences
     }
 }
 

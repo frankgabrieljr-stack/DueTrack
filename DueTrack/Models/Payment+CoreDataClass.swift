@@ -25,8 +25,22 @@ extension Payment {
         dueDate ?? datePaid
     }
 
+    /// Scheduled bill date this payment applies to.
+    /// A payment saved on the day it was paid still covers the occurrence it fell after.
+    public var coveredScheduledDueDate: Date {
+        guard let bill else { return effectiveDueDate }
+        let frequency = BillFrequency(rawValue: bill.frequency) ?? .monthly
+        return DateHelpers.scheduledOccurrence(
+            containing: effectiveDueDate,
+            startDate: bill.createdDate ?? effectiveDueDate,
+            frequency: frequency,
+            customInterval: frequency == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil,
+            customUnit: frequency == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil
+        )
+    }
+
     public var wasPaidLate: Bool {
-        Calendar.current.startOfDay(for: datePaid) > Calendar.current.startOfDay(for: effectiveDueDate)
+        Calendar.current.startOfDay(for: datePaid) > Calendar.current.startOfDay(for: coveredScheduledDueDate)
     }
 }
 

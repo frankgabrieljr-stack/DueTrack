@@ -2,10 +2,13 @@ import SwiftUI
 
 struct BillsListView: View {
     @EnvironmentObject var billViewModel: BillViewModel
+    @EnvironmentObject var paymentViewModel: PaymentViewModel
     @State private var searchText = ""
     @State private var filterCategory: BillCategory?
     
     var filteredBills: [Bill] {
+        // Observe payments so row status refreshes after marking paid/overdue.
+        _ = paymentViewModel.payments
         var bills = billViewModel.bills
         
         if !searchText.isEmpty {
@@ -66,6 +69,10 @@ struct BillsListView: View {
                 }
             }
             .navigationTitle("Bills")
+            .onAppear {
+                billViewModel.fetchBills()
+                paymentViewModel.fetchAllPayments()
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink(destination: AddBillView()) {
@@ -137,21 +144,22 @@ private extension BillRowView {
     }
 
     var uiStatus: PaymentStatus {
-        if bill.paymentStatus == .overdue {
+        if !paymentViewModel.unpaidOverdueOccurrences(for: bill).isEmpty {
             return .overdue
         }
 
-        if paymentViewModel.paymentForCurrentPeriod(for: bill) != nil {
+        if paymentViewModel.isBillPaid(bill) || paymentViewModel.paymentForCurrentPeriod(for: bill) != nil {
             return .paid
         }
         
-        let nextDue = bill.nextDueDate
-        let today = Date()
+        let calendar = Calendar.current
+        let nextDue = calendar.startOfDay(for: bill.nextDueDate)
+        let today = calendar.startOfDay(for: Date())
         if nextDue < today {
             return .overdue
         }
         
-        let daysUntil = Calendar.current.dateComponents([.day], from: today, to: nextDue).day ?? 0
+        let daysUntil = calendar.dateComponents([.day], from: today, to: nextDue).day ?? 0
         if daysUntil <= 7 && daysUntil >= 0 {
             return .upcoming
         }

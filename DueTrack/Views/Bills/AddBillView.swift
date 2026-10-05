@@ -59,6 +59,12 @@ struct AddBillView: View {
                     
                     Toggle("AutoPay", isOn: $isAutoPay)
                     
+                    if frequency == .oneTime {
+                        Text("This bill is due once, on the start date, and does not repeat.")
+                            .font(.caption)
+                            .foregroundColor(.adaptiveSecondaryText)
+                    }
+                    
                     if frequency == .custom {
                         HStack {
                             Picker("Every", selection: $customInterval) {

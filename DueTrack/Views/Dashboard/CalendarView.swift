@@ -247,8 +247,9 @@ struct CalendarGridView: View {
     /// Returns true if there is at least one unpaid occurrence on this date in the past (overdue).
     private func hasOverdue(on date: Date, billsForDay: [Bill]) -> Bool {
         let calendar = Calendar.current
-        let today = Date()
-        guard date < today else { return false }
+        let startOfToday = calendar.startOfDay(for: Date())
+        let day = calendar.startOfDay(for: date)
+        guard day < startOfToday else { return false }
         
         let month = calendar.date(from: calendar.dateComponents([.year, .month], from: date))!
         

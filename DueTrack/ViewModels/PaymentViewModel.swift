@@ -11,27 +11,27 @@ class PaymentViewModel: ObservableObject {
     
     init() {
         setupObservers()
+        fetchAllPayments()
     }
     
     // MARK: - Fetch Payments
+    /// Always loads the full payments list. Bill-specific filtering belongs in `paymentHistory(for:)`.
     func fetchPayments(for billId: UUID? = nil) {
+        // NOTE: Intentionally ignores billId for the published array so opening one bill
+        // never wipes payment state used by Dashboard / Bills / Insights.
+        fetchAllPayments()
+    }
+    
+    // MARK: - Fetch All Payments
+    func fetchAllPayments() {
         let request: NSFetchRequest<Payment> = Payment.fetchRequest()
         request.sortDescriptors = [NSSortDescriptor(keyPath: \Payment.datePaid, ascending: false)]
-        
-        if let billId = billId {
-            request.predicate = NSPredicate(format: "billId == %@", billId as CVarArg)
-        }
         
         do {
             payments = try coreDataManager.viewContext.fetch(request)
         } catch {
             print("Error fetching payments: \(error)")
         }
-    }
-    
-    // MARK: - Fetch All Payments
-    func fetchAllPayments() {
-        fetchPayments(for: nil)
     }
     
     // MARK: - Create Payment
@@ -60,8 +60,7 @@ class PaymentViewModel: ObservableObject {
         
         let saved = coreDataManager.save()
         if saved {
-            fetchPayments(for: bill.id)
-            fetchAllPayments() // Refresh all payments for dashboard
+            fetchAllPayments()
             
             // Cancel old notifications and schedule new ones for next occurrence
             NotificationManager.shared.cancelNotifications(for: bill.id)
@@ -101,28 +100,24 @@ class PaymentViewModel: ObservableObject {
         notes: String? = nil
     ) -> Bool {
         let paymentAmount = amount ?? bill.amount
-        // Prevent duplicate payments for the same occurrence date
-        if paymentExists(for: bill, on: occurrenceDate) != nil {
+        let occurrence = scheduledOccurrenceDate(for: bill, containing: occurrenceDate)
+        // Prevent duplicate payments for the same occurrence, including a payment
+        // that was saved on the day it was paid instead of the real due date.
+        if paymentExists(for: bill, on: occurrence) != nil {
             return true
         }
-        return createPayment(for: bill, amount: paymentAmount, datePaid: datePaid, dueDate: occurrenceDate, notes: notes)
+        return createPayment(for: bill, amount: paymentAmount, datePaid: datePaid, dueDate: occurrence, notes: notes)
     }
     
     // MARK: - Get Payment History for Bill
     func paymentHistory(for bill: Bill) -> [Payment] {
-        guard let billId = bill.id else {
-            return []
-        }
+        var history = bill.resolvedPayments
 
-        var history: [Payment] = payments.compactMap { payment in
-            guard payment.billId == billId else { return nil }
-            return payment
-        }
-
-        let relationshipPayments = (bill.payments as? Set<Payment>) ?? []
-        for payment in relationshipPayments {
-            if !history.contains(where: { $0.id == payment.id }) {
-                history.append(payment)
+        if let billId = bill.id {
+            for payment in payments where payment.billId == billId {
+                if !history.contains(where: { $0.objectID == payment.objectID }) {
+                    history.append(payment)
+                }
             }
         }
 
@@ -149,19 +144,39 @@ class PaymentViewModel: ObservableObject {
     
     // MARK: - Get Payment for Current Period
     func paymentForCurrentPeriod(for bill: Bill) -> Payment? {
-        let calendar = Calendar.current
         let occurrence = currentPeriodOccurrenceDate(for: bill)
-        return paymentHistory(for: bill).first { payment in
-            calendar.isDate(payment.effectiveDueDate, inSameDayAs: occurrence)
-        }
+        let frequency = BillFrequency(rawValue: bill.frequency) ?? .monthly
+        return DateHelpers.matchingPayment(
+            for: occurrence,
+            frequency: frequency,
+            payments: paymentHistory(for: bill),
+            customInterval: frequency == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil,
+            customUnit: frequency == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil
+        )
     }
 
     /// Returns an existing payment that matches the given date (same day), if any.
     func paymentExists(for bill: Bill, on date: Date) -> Payment? {
-        let calendar = Calendar.current
-        return paymentHistory(for: bill).first { payment in
-            calendar.isDate(payment.effectiveDueDate, inSameDayAs: date)
-        }
+        let frequency = BillFrequency(rawValue: bill.frequency) ?? .monthly
+        let occurrence = scheduledOccurrenceDate(for: bill, containing: date)
+        return DateHelpers.matchingPayment(
+            for: occurrence,
+            frequency: frequency,
+            payments: paymentHistory(for: bill),
+            customInterval: frequency == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil,
+            customUnit: frequency == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil
+        )
+    }
+
+    private func scheduledOccurrenceDate(for bill: Bill, containing date: Date) -> Date {
+        let frequency = BillFrequency(rawValue: bill.frequency) ?? .monthly
+        return DateHelpers.scheduledOccurrence(
+            containing: date,
+            startDate: bill.createdDate ?? date,
+            frequency: frequency,
+            customInterval: frequency == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil,
+            customUnit: frequency == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil
+        )
     }
 
     private func nextUnpaidOccurrenceDate(for bill: Bill, asOf date: Date = Date()) -> Date? {
@@ -234,45 +249,15 @@ class PaymentViewModel: ObservableObject {
 
     /// Unpaid occurrences before today (overdue).
     func unpaidOverdueOccurrences(for bill: Bill, upTo date: Date = Date()) -> [Date] {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: date)
         let frequency = BillFrequency(rawValue: bill.frequency) ?? .monthly
-        let startDate = bill.createdDate ?? today
-        let customIntervalValue = frequency == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil
-        let customUnitValue = frequency == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil
-        let payments = paymentHistory(for: bill)
-
-        var occurrences: [Date] = []
-        var occurrence = calendar.startOfDay(for: startDate)
-        var safetyCounter = 0
-
-        while occurrence < today && safetyCounter < 1000 {
-            let isPaid = DateHelpers.isOccurrencePaid(
-                occurrenceDate: occurrence,
-                frequency: frequency,
-                payments: payments,
-                customInterval: customIntervalValue,
-                customUnit: customUnitValue
-            )
-
-            if !isPaid {
-                occurrences.append(occurrence)
-            }
-
-            let next = DateHelpers.nextOccurrence(
-                from: occurrence,
-                frequency: frequency,
-                customInterval: customIntervalValue,
-                customUnit: customUnitValue
-            )
-            if next <= occurrence {
-                break
-            }
-            occurrence = calendar.startOfDay(for: next)
-            safetyCounter += 1
-        }
-
-        return occurrences
+        return DateHelpers.unpaidOverdueOccurrences(
+            startDate: bill.createdDate ?? date,
+            frequency: frequency,
+            payments: paymentHistory(for: bill),
+            customInterval: frequency == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil,
+            customUnit: frequency == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil,
+            upTo: date
+        )
     }
     
     // MARK: - Delete Payment (Unmark as Paid)
@@ -298,9 +283,8 @@ class PaymentViewModel: ObservableObject {
         // Save the deletion using CoreDataManager's save method
         _ = coreDataManager.save()
         
-        // Now fetch payments using the saved billId (payment object is deleted, can't access it)
-        fetchPayments(for: savedBillId)
-        fetchAllPayments() // Refresh all payments for dashboard
+        // Now refresh using the saved billId (payment object is deleted, can't access it)
+        fetchAllPayments()
         
         // Reschedule notifications for the bill since payment was removed
         // Fetch the bill separately to avoid accessing deleted relationship
@@ -332,6 +316,10 @@ class PaymentViewModel: ObservableObject {
         amount: Double? = nil,
         notes: String? = nil
     ) -> Bool {
+        if bill.id == nil {
+            bill.id = UUID()
+        }
+
         let overdueOccurrences = unpaidOverdueOccurrences(for: bill)
         guard !overdueOccurrences.isEmpty else {
             return true
@@ -339,14 +327,20 @@ class PaymentViewModel: ObservableObject {
 
         let paymentAmount = amount ?? bill.amount
         let context = coreDataManager.viewContext
+        let calendar = Calendar.current
 
         for occurrence in overdueOccurrences {
+            // Skip if a payment for this due date already exists
+            if paymentExists(for: bill, on: occurrence) != nil {
+                continue
+            }
+
             let payment = Payment(context: context)
             payment.id = UUID()
             payment.billId = bill.id
             payment.amount = paymentAmount
             payment.datePaid = datePaid
-            payment.dueDate = occurrence
+            payment.dueDate = calendar.startOfDay(for: occurrence)
             payment.isPaid = true
             payment.notes = notes
             payment.bill = bill
@@ -354,7 +348,6 @@ class PaymentViewModel: ObservableObject {
 
         let saved = coreDataManager.save()
         if saved {
-            fetchPayments(for: bill.id)
             fetchAllPayments()
 
             if let billId = bill.id {
@@ -383,9 +376,6 @@ class PaymentViewModel: ObservableObject {
 
         let saved = coreDataManager.save()
         if saved {
-            if let billId = payment.billId {
-                fetchPayments(for: billId)
-            }
             fetchAllPayments()
 
             if let billId = payment.billId {
@@ -418,32 +408,50 @@ class PaymentViewModel: ObservableObject {
     
     // MARK: - Total Paid for Month
     func totalPaidForMonth(for month: Date) -> Double {
-        let calendar = Calendar.current
-        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: month))!
-        let startOfNextMonth = calendar.date(byAdding: .month, value: 1, to: startOfMonth)!
-        
-        return payments.filter { payment in
-            let paymentDate = payment.datePaid
-            return paymentDate >= startOfMonth && paymentDate < startOfNextMonth
-        }.reduce(0) { $0 + $1.amount }
+        paymentsForMonth(month).reduce(0) { partial, payment in
+            let cap = payment.bill?.amount ?? payment.amount
+            return partial + min(payment.amount, cap)
+        }
     }
     
-    /// All individual payments for a given calendar month.
+    /// One row per scheduled occurrence in the month.
+    /// A second payment for the same due date does not increase the total.
     func paymentsForMonth(_ month: Date) -> [Payment] {
         let calendar = Calendar.current
         let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: month))!
         let startOfNextMonth = calendar.date(byAdding: .month, value: 1, to: startOfMonth)!
         
-        return payments.filter { payment in
+        let inMonth = payments.filter { payment in
             let paymentDate = payment.datePaid
             return paymentDate >= startOfMonth && paymentDate < startOfNextMonth
         }
-        .sorted { $0.datePaid > $1.datePaid }
+        
+        var chosen: [String: Payment] = [:]
+        for payment in inMonth {
+            let key = occurrenceKey(for: payment)
+            if let existing = chosen[key] {
+                if payment.datePaid > existing.datePaid {
+                    chosen[key] = payment
+                }
+            } else {
+                chosen[key] = payment
+            }
+        }
+        
+        return chosen.values.sorted { $0.datePaid > $1.datePaid }
+    }
+
+    private func occurrenceKey(for payment: Payment) -> String {
+        let due = payment.coveredScheduledDueDate
+        let day = Calendar.current.startOfDay(for: due).timeIntervalSince1970
+        let billKey = payment.billId?.uuidString ?? payment.bill?.id?.uuidString ?? payment.id.uuidString
+        return "\(billKey)-\(day)"
     }
     
     // MARK: - Observers
     private func setupObservers() {
         NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.fetchAllPayments()
             }

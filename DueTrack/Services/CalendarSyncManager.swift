@@ -89,7 +89,6 @@ enum CalendarSyncManager {
 
         for bill in bills {
             let frequency = BillFrequency(rawValue: bill.frequency) ?? .monthly
-            let startDate = bill.createdDate ?? Date()
             var next = bill.nextDueDate
             let cal = Calendar.current
 
@@ -105,13 +104,14 @@ enum CalendarSyncManager {
                 do { try store.save(event, span: .thisEvent, commit: false) }
                 catch { print("CalendarSyncManager: save event failed: \(error)") }
 
+                let previous = next
                 next = DateHelpers.nextOccurrence(
-                    from: next,
+                    from: previous,
                     frequency: frequency,
                     customInterval: frequency == .custom && bill.customInterval > 0 ? Int(bill.customInterval) : nil,
                     customUnit: frequency == .custom ? CustomRecurrenceUnit(rawValue: bill.customUnit ?? "") : nil
                 )
-                if next <= startDate { break }
+                if next <= previous { break }
             }
         }
 
